@@ -2,7 +2,6 @@ export type TaskStatus = "todo" | "in-progress" | "completed";
 
 export interface Task {
   id: string;
-  userId?: string;
   title: string;
   description: string;
   status: TaskStatus;
@@ -16,5 +15,5 @@ export type TaskFormData = {
   status: TaskStatus;
 };
 
-export type CreateTaskData = Omit<Task, "id" | "createdAt" | "updatedAt">;
+export type CreateTaskData = TaskFormData;
 export type UpdateTaskData = Partial<TaskFormData>;

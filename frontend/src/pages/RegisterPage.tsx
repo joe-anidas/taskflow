@@ -36,7 +36,7 @@ export const RegisterPage = () => {
     try {
       const { confirmPassword, ...registerData } = data;
       const response = await registerUser(registerData);
-      setAuth(response.user);
+      setAuth(response.user, response.token);
       navigate("/tasks");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Registration failed");

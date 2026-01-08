@@ -23,7 +23,7 @@ export const Tasks = () => {
     deleteTask,
     isCreating,
     isUpdating,
-  } = useTasks(user?.id);
+  } = useTasks();
 
   const handleSubmit = (data: TaskFormData) => {
     if (editingTask) {

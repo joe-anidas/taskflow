@@ -8,36 +8,40 @@ interface ProtectedRouteProps {
 }
 
 export const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
-  const { isAuthenticated, user, logout } = useAuthStore();
+  const { isAuthenticated, token, logout } = useAuthStore();
   const [isChecking, setIsChecking] = useState(true);
   const [isValidUser, setIsValidUser] = useState(false);
 
   useEffect(() => {
     const verifyUser = async () => {
-      if (!user) {
+      if (!token) {
         setIsValidUser(false);
         setIsChecking(false);
         return;
       }
 
       try {
-
         const response = await fetch(
-          `${import.meta.env.VITE_JSON_SERVER_API_URL}/users/${user.id}`
+          `${import.meta.env.VITE_API_URL}/auth/me`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
         );
 
         if (!response.ok) {
-          throw new Error("Failed to validate user");
+          throw new Error("Failed to validate token");
         }
 
         const result = await response.json();
-        const exists = Boolean(result?.id);
+        const ok = Boolean(result?.success);
 
-        if (!exists) {
+        if (!ok) {
           logout();
         }
 
-        setIsValidUser(exists);
+        setIsValidUser(ok);
       } catch (err) {
         logout();
         setIsValidUser(false);
@@ -47,7 +51,7 @@ export const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
     };
 
     void verifyUser();
-  }, [user, logout]);
+  }, [token, logout]);
 
   if (isChecking) {
     return <Loader />;

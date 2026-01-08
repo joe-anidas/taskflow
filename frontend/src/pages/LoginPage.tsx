@@ -36,7 +36,7 @@ export const LoginPage = () => {
 
     try {
       const response = await login(data);
-      setAuth(response.user);
+      setAuth(response.user, response.token);
       navigate("/tasks");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
