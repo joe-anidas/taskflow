@@ -16,6 +16,8 @@ const buildQuery = (params?: TaskQueryParams): string => {
   if (params.limit) q.set("limit", String(params.limit));
   if (params.q && params.q.trim()) q.set("q", params.q.trim());
   if (params.status && params.status !== "all") q.set("status", params.status);
+  if (params.priority && params.priority !== "all")
+    q.set("priority", params.priority);
   if (params.tenantId) q.set("tenantId", params.tenantId);
   if (params.userId) q.set("userId", params.userId);
   return q.toString();
@@ -28,6 +30,9 @@ interface TaskResponse {
   userId?: string;
   title: string;
   description: string;
+  status: string;
+  priority?: string;
+  dueDate?: string | null;
   status: TaskStatus;
   createdAt: string | Date;
   updatedAt: string | Date;
@@ -60,7 +65,9 @@ const normalizeTask = (task: TaskResponse): Task => ({
   userId: task.userId,
   title: task.title,
   description: task.description,
-  status: task.status,
+  status: task.status as any,
+  priority: task.priority as any,
+  dueDate: task.dueDate ? new Date(task.dueDate) : null,
   createdAt: new Date(task.createdAt),
   updatedAt: new Date(task.updatedAt),
 });

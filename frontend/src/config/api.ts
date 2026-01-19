@@ -18,6 +18,8 @@ export const API_ENDPOINTS = {
     ME: "/api/auth/me",
     CREATE_TENANT_USER: "/api/auth/tenant/users",
     USERS: "/api/auth/users",
+    UPDATE_USER: (id: string) => `/api/auth/users/${id}`,
+    DELETE_USER: (id: string) => `/api/auth/users/${id}`,
     ORGANIZATION: "/api/auth/organization",
   },
   TASKS: {

@@ -7,6 +7,12 @@ export const TASK_STATUS = {
   COMPLETED: "completed",
 } as const;
 
+export const TASK_PRIORITY = {
+  LOW: "low",
+  MEDIUM: "medium",
+  HIGH: "high",
+} as const;
+
 export const STATUS_COLORS: Record<string, string> = {
   todo: "bg-gray-100 text-gray-800",
   "in-progress": "bg-blue-100 text-blue-800",
@@ -17,6 +23,18 @@ export const STATUS_LABELS: Record<string, string> = {
   todo: "To Do",
   "in-progress": "In Progress",
   completed: "Completed",
+};
+
+export const PRIORITY_COLORS: Record<string, string> = {
+  low: "bg-green-100 text-green-800",
+  medium: "bg-yellow-100 text-yellow-800",
+  high: "bg-red-100 text-red-800",
+};
+
+export const PRIORITY_LABELS: Record<string, string> = {
+  low: "Low",
+  medium: "Medium",
+  high: "High",
 };
 
 export const TASK_VALIDATION = {

@@ -4,6 +4,8 @@ import {
   register,
   createTenantUser,
   listUsers,
+  updateUser,
+  deleteUser,
   getOrganization,
   updateOrganizationName,
   logout,
@@ -36,6 +38,20 @@ router.get(
   authenticateToken,
   authorizeRoles("tenantAdmin", "superadmin"),
   listUsers
+);
+
+router.patch(
+  "/users/:id",
+  authenticateToken,
+  authorizeRoles("tenantAdmin", "superadmin"),
+  updateUser
+);
+
+router.delete(
+  "/users/:id",
+  authenticateToken,
+  authorizeRoles("tenantAdmin", "superadmin"),
+  deleteUser
 );
 
 router.get("/organization", authenticateToken, getOrganization);

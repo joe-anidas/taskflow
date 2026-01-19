@@ -1,7 +1,7 @@
 import { useForm } from "react-hook-form";
 import type { Task, TaskFormData } from "../../../types/task";
 import { Button } from "../../ui/button";
-import { TASK_VALIDATION } from "../../../constants/task";
+import { TASK_VALIDATION, PRIORITY_LABELS } from "../../../constants/task";
 
 interface TaskFormProps {
   task?: Task | null;
@@ -26,11 +26,17 @@ export const TaskForm = ({
           title: task.title,
           description: task.description,
           status: task.status,
+          priority: task.priority || "medium",
+          dueDate: task.dueDate
+            ? new Date(task.dueDate).toISOString().split("T")[0]
+            : null,
         }
       : {
           title: "",
           description: "",
           status: "todo",
+          priority: "medium",
+          dueDate: null,
         },
   });
 
@@ -112,6 +118,41 @@ export const TaskForm = ({
           <option value="in-progress">In Progress</option>
           <option value="completed">Completed</option>
         </select>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label
+            htmlFor="priority"
+            className="block text-sm font-medium text-gray-700 mb-1"
+          >
+            Priority
+          </label>
+          <select
+            id="priority"
+            {...register("priority")}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          >
+            <option value="low">{PRIORITY_LABELS.low}</option>
+            <option value="medium">{PRIORITY_LABELS.medium}</option>
+            <option value="high">{PRIORITY_LABELS.high}</option>
+          </select>
+        </div>
+
+        <div>
+          <label
+            htmlFor="dueDate"
+            className="block text-sm font-medium text-gray-700 mb-1"
+          >
+            Due Date
+          </label>
+          <input
+            id="dueDate"
+            type="date"
+            {...register("dueDate")}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          />
+        </div>
       </div>
 
       <div className="flex flex-col gap-3 pt-4 sm:flex-row sm:justify-end">

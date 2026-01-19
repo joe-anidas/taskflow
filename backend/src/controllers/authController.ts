@@ -665,3 +665,177 @@ export async function resetPassword(
     next(err);
   }
 }
+
+export async function updateUser(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const actor = req.user;
+    if (!actor) {
+      return res.status(401).json({ success: false, error: "Unauthorized" });
+    }
+
+    const { id } = req.params;
+    const { name, email, role } = req.body as {
+      name?: string;
+      email?: string;
+      role?: UserRole;
+    };
+
+    if (!isValidObjectId(id)) {
+      return res
+        .status(400)
+        .json({ success: false, error: "Invalid user identifier" });
+    }
+
+    const targetUser = await User.findById(id);
+    if (!targetUser) {
+      return res.status(404).json({ success: false, error: "User not found" });
+    }
+
+    // Permission checks
+    if (actor.role === "tenantAdmin") {
+      if (
+        !actor.tenantId ||
+        targetUser.tenantId?.toString() !== actor.tenantId
+      ) {
+        return res.status(403).json({
+          success: false,
+          error: "Cannot update users outside your tenant",
+        });
+      }
+      // Tenant admins can't update other admins or superadmins
+      if (targetUser.role !== "user") {
+        return res.status(403).json({
+          success: false,
+          error: "Cannot update admin users",
+        });
+      }
+    } else if (actor.role !== "superadmin") {
+      return res.status(403).json({ success: false, error: "Forbidden" });
+    }
+
+    // Update fields
+    if (name) {
+      const nameCheck = isValidName(name);
+      if (!nameCheck.valid) {
+        return res
+          .status(400)
+          .json({ success: false, error: nameCheck.message });
+      }
+      targetUser.name = name;
+    }
+
+    if (email) {
+      if (!isValidEmail(email)) {
+        return res
+          .status(400)
+          .json({ success: false, error: "Please provide a valid email" });
+      }
+      const existingUser = await User.findOne({
+        email,
+        _id: { $ne: id },
+      });
+      if (existingUser) {
+        return res.status(400).json({
+          success: false,
+          error: "User with this email already exists",
+        });
+      }
+      targetUser.email = email;
+    }
+
+    if (role) {
+      if (actor.role === "tenantAdmin") {
+        return res.status(403).json({
+          success: false,
+          error: "Tenant admins cannot change user roles",
+        });
+      }
+      targetUser.role = role;
+    }
+
+    await targetUser.save();
+
+    return res.json({
+      success: true,
+      message: "User updated successfully",
+      user: {
+        id: targetUser._id.toString(),
+        name: targetUser.name,
+        email: targetUser.email,
+        role: targetUser.role,
+        tenantId: targetUser.tenantId ? targetUser.tenantId.toString() : null,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function deleteUser(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const actor = req.user;
+    if (!actor) {
+      return res.status(401).json({ success: false, error: "Unauthorized" });
+    }
+
+    const { id } = req.params;
+
+    if (!isValidObjectId(id)) {
+      return res
+        .status(400)
+        .json({ success: false, error: "Invalid user identifier" });
+    }
+
+    const targetUser = await User.findById(id);
+    if (!targetUser) {
+      return res.status(404).json({ success: false, error: "User not found" });
+    }
+
+    // Can't delete yourself
+    if (targetUser._id.toString() === actor.userId) {
+      return res.status(400).json({
+        success: false,
+        error: "Cannot delete your own account",
+      });
+    }
+
+    // Permission checks
+    if (actor.role === "tenantAdmin") {
+      if (
+        !actor.tenantId ||
+        targetUser.tenantId?.toString() !== actor.tenantId
+      ) {
+        return res.status(403).json({
+          success: false,
+          error: "Cannot delete users outside your tenant",
+        });
+      }
+      // Tenant admins can't delete other admins or superadmins
+      if (targetUser.role !== "user") {
+        return res.status(403).json({
+          success: false,
+          error: "Cannot delete admin users",
+        });
+      }
+    } else if (actor.role !== "superadmin") {
+      return res.status(403).json({ success: false, error: "Forbidden" });
+    }
+
+    await User.deleteOne({ _id: id });
+
+    return res.json({
+      success: true,
+      message: "User deleted successfully",
+    });
+  } catch (err) {
+    next(err);
+  }
+}

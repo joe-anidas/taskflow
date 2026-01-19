@@ -1,7 +1,8 @@
 import { useState, useMemo } from "react";
-import type { Task, TaskStatus } from "../../../types/task";
+import type { Task, TaskStatus, TaskPriority } from "../../../types/task";
 import { TaskCard } from "./TaskCard";
 import { Button } from "../../ui/button";
+import { PRIORITY_LABELS } from "../../../constants/task";
 
 interface TaskListProps {
   tasks: Task[];
@@ -22,7 +23,13 @@ export const TaskList = ({
   onPrevPage,
   onNextPage,
 }: TaskListProps) => {
-  const [filter, setFilter] = useState<TaskStatus | "all">("all");
+  const [statusFilter, setStatusFilter] = useState<TaskStatus | "all">("all");
+  const [priorityFilter, setPriorityFilter] = useState<TaskPriority | "all">(
+    "all"
+  );
+  const [dueDateFilter, setDueDateFilter] = useState<
+    "all" | "overdue" | "today" | "week"
+  >("all");
 
   const taskCounts = useMemo(
     () => ({
@@ -34,39 +41,145 @@ export const TaskList = ({
     [tasks]
   );
 
-  const filteredTasks = useMemo(
-    () =>
-      filter === "all" ? tasks : tasks.filter((task) => task.status === filter),
-    [tasks, filter]
-  );
+  const filteredTasks = useMemo(() => {
+    let result = tasks;
+
+    // Status filter
+    if (statusFilter !== "all") {
+      result = result.filter((task) => task.status === statusFilter);
+    }
+
+    // Priority filter
+    if (priorityFilter !== "all") {
+      result = result.filter((task) => task.priority === priorityFilter);
+    }
+
+    // Due date filter
+    if (dueDateFilter !== "all") {
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const weekEnd = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+      result = result.filter((task) => {
+        if (!task.dueDate) return false;
+        const dueDate = new Date(task.dueDate);
+        const dueDateNorm = new Date(
+          dueDate.getFullYear(),
+          dueDate.getMonth(),
+          dueDate.getDate()
+        );
+
+        switch (dueDateFilter) {
+          case "overdue":
+            return dueDateNorm < today && task.status !== "completed";
+          case "today":
+            return dueDateNorm.getTime() === today.getTime();
+          case "week":
+            return dueDateNorm >= today && dueDateNorm <= weekEnd;
+          default:
+            return false;
+        }
+      });
+    }
+
+    return result;
+  }, [tasks, statusFilter, priorityFilter, dueDateFilter]);
 
   return (
     <div>
-      <div className="flex flex-wrap gap-2 mb-6">
-        <Button
-          variant={filter === "all" ? "default" : "outline"}
-          onClick={() => setFilter("all")}
-        >
-          All ({taskCounts.all})
-        </Button>
-        <Button
-          variant={filter === "todo" ? "default" : "outline"}
-          onClick={() => setFilter("todo")}
-        >
-          To Do ({taskCounts.todo})
-        </Button>
-        <Button
-          variant={filter === "in-progress" ? "default" : "outline"}
-          onClick={() => setFilter("in-progress")}
-        >
-          In Progress ({taskCounts["in-progress"]})
-        </Button>
-        <Button
-          variant={filter === "completed" ? "default" : "outline"}
-          onClick={() => setFilter("completed")}
-        >
-          Completed ({taskCounts.completed})
-        </Button>
+      <div className="space-y-3 mb-6">
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant={statusFilter === "all" ? "default" : "outline"}
+            onClick={() => setStatusFilter("all")}
+            size="sm"
+          >
+            All ({taskCounts.all})
+          </Button>
+          <Button
+            variant={statusFilter === "todo" ? "default" : "outline"}
+            onClick={() => setStatusFilter("todo")}
+            size="sm"
+          >
+            To Do ({taskCounts.todo})
+          </Button>
+          <Button
+            variant={statusFilter === "in-progress" ? "default" : "outline"}
+            onClick={() => setStatusFilter("in-progress")}
+            size="sm"
+          >
+            In Progress ({taskCounts["in-progress"]})
+          </Button>
+          <Button
+            variant={statusFilter === "completed" ? "default" : "outline"}
+            onClick={() => setStatusFilter("completed")}
+            size="sm"
+          >
+            Completed ({taskCounts.completed})
+          </Button>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant={priorityFilter === "all" ? "default" : "outline"}
+            onClick={() => setPriorityFilter("all")}
+            size="sm"
+          >
+            All Priority
+          </Button>
+          <Button
+            variant={priorityFilter === "low" ? "default" : "outline"}
+            onClick={() => setPriorityFilter("low")}
+            size="sm"
+          >
+            {PRIORITY_LABELS.low}
+          </Button>
+          <Button
+            variant={priorityFilter === "medium" ? "default" : "outline"}
+            onClick={() => setPriorityFilter("medium")}
+            size="sm"
+          >
+            {PRIORITY_LABELS.medium}
+          </Button>
+          <Button
+            variant={priorityFilter === "high" ? "default" : "outline"}
+            onClick={() => setPriorityFilter("high")}
+            size="sm"
+          >
+            {PRIORITY_LABELS.high}
+          </Button>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant={dueDateFilter === "all" ? "default" : "outline"}
+            onClick={() => setDueDateFilter("all")}
+            size="sm"
+          >
+            All Dates
+          </Button>
+          <Button
+            variant={dueDateFilter === "overdue" ? "default" : "outline"}
+            onClick={() => setDueDateFilter("overdue")}
+            size="sm"
+          >
+            Overdue
+          </Button>
+          <Button
+            variant={dueDateFilter === "today" ? "default" : "outline"}
+            onClick={() => setDueDateFilter("today")}
+            size="sm"
+          >
+            Today
+          </Button>
+          <Button
+            variant={dueDateFilter === "week" ? "default" : "outline"}
+            onClick={() => setDueDateFilter("week")}
+            size="sm"
+          >
+            Next 7 Days
+          </Button>
+        </div>
       </div>
 
       {filteredTasks.length === 0 ? (
