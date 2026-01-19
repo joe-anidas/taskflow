@@ -68,7 +68,7 @@ export const useTasks = (context?: UseTasksContext) => {
       if (tenantId) {
         payload.tenantId = tenantId;
       }
-      if (role !== "user" && !data.userId && userId) {
+      if (role !== "user" && userId) {
         payload.userId = userId;
       }
       return taskService.createTask(payload);

@@ -15,8 +15,8 @@ interface UnifiedTaskModalProps {
   task?: Task | null; // If null/undefined, it's create mode
   isOpen: boolean;
   onClose: () => void;
-  onSave: (taskId: string, updates: Partial<Task>) => void;
-  onCreate?: (data: Partial<Task>) => void;
+  onSave: (taskId: string, updates: Partial<Omit<Task, 'dueDate'>> & { dueDate?: string | Date | null }) => void;
+  onCreate?: (data: Partial<Omit<Task, 'dueDate'>> & { dueDate?: string | Date | null }) => void;
   onTaskUpdate?: () => void;
   defaultStatus?: TaskStatus;
   users?: User[]; // For tenant admin assignee selection

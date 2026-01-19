@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import type { Task, TaskStatus, TaskPriority } from "@/types/task";
+import type { Task, TaskStatus, TaskPriority, TaskFormData, CreateTaskData } from "@/types/task";
 import type { Sprint } from "@/types/sprint";
 import { useTasks } from "@/hooks";
 import { TaskBoard } from "./TaskBoard";
@@ -141,8 +141,8 @@ export const Tasks = () => {
     tasks.length,
     sprints,
   ]);
-  const handleCreate = (data: Partial<Task>) => {
-    const taskData = {
+  const handleCreate = (data: Partial<Omit<Task, 'dueDate'>> & { dueDate?: string | Date | null }) => {
+    const taskData: CreateTaskData & { sprintId?: string | null } = {
       title: data.title!,
       description: data.description || "",
       status: data.status || "todo",
@@ -155,7 +155,7 @@ export const Tasks = () => {
         : null,
       sprintId: data.sprintId || selectedSprintId || null,
       userId: data.userId || user?.id,
-      tenantId: user?.tenantId,
+      tenantId: user?.tenantId || undefined,
     };
 
     createTask(taskData, {
@@ -166,15 +166,20 @@ export const Tasks = () => {
     });
   };
 
-  const handleUpdate = (taskId: string, updates: Partial<Task>) => {
+  const handleUpdate = (taskId: string, updates: Partial<Omit<Task, 'dueDate'>> & { dueDate?: string | Date | null }) => {
     // Convert Date to string for dueDate if needed (IST format)
     const { dueDate, ...rest } = updates;
 
-    const formattedUpdates: Partial<Task> = {
-      ...rest,
-      ...(dueDate && {
+    const formattedUpdates: Partial<TaskFormData> = {
+      ...(rest.title && { title: rest.title }),
+      ...(rest.description !== undefined && { description: rest.description }),
+      ...(rest.status && { status: rest.status }),
+      ...(rest.priority && { priority: rest.priority }),
+      ...(dueDate !== undefined && {
         dueDate:
-          typeof dueDate === "string"
+          dueDate === null
+            ? null
+            : typeof dueDate === "string"
             ? dueDate
             : formatDateInputIST(dueDate),
       }),
