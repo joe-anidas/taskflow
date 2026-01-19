@@ -218,6 +218,13 @@ export async function createTenantUser(
       tenantId?: string;
     };
 
+    console.log("[createTenantUser] Request:", {
+       actorId: actor.userId,
+       actorRole: actor.role,
+       requestedRole,
+       bodyTenantId
+    });
+
     if (!name || !email || !password) {
       return res.status(400).json({
         success: false,
@@ -260,6 +267,21 @@ export async function createTenantUser(
       }
       tenantId = bodyTenantId;
       role = requestedRole === "tenantAdmin" ? "tenantAdmin" : "user";
+      
+      // Enforce single tenant admin rule
+      if (role === "tenantAdmin") {
+        const existingAdmin = await User.findOne({ 
+          tenantId, 
+          role: "tenantAdmin" 
+        });
+        
+        if (existingAdmin) {
+          return res.status(409).json({ 
+            success: false, 
+            error: "This organization already has a Tenant Admin" 
+          });
+        }
+      }
     } else {
       // Tenant admins can only create users inside their own tenant
       role = "user";
@@ -374,6 +396,98 @@ export async function getOrganization(
 
     return res.json({
       success: true,
+      organization: {
+        id: organization._id.toString(),
+        name: organization.name,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getAllOrganizations(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const actor = req.user;
+    if (!actor || actor.role !== "superadmin") {
+      return res.status(403).json({ success: false, error: "Forbidden" });
+    }
+
+    const organizations = await Organization.find({})
+      .select("name _id")
+      .sort({ name: 1 });
+
+    // Fetch all tenant admins to identify which organizations already have one
+    const tenantAdmins = await User.find({ role: "tenantAdmin" }).select(
+      "tenantId"
+    );
+    const tenantAdminMap = new Set(
+      tenantAdmins.map((u) => u.tenantId?.toString())
+    );
+
+    return res.json({
+      success: true,
+      organizations: organizations.map((org) => ({
+        id: org._id.toString(),
+        name: org.name,
+        hasTenantAdmin: tenantAdminMap.has(org._id.toString()),
+      })),
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function createOrganization(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const actor = req.user;
+    if (!actor || actor.role !== "superadmin") {
+      return res.status(403).json({ success: false, error: "Forbidden" });
+    }
+
+    const { name } = req.body as { name?: string };
+
+    if (!name || typeof name !== "string" || name.trim().length === 0) {
+      return res
+        .status(400)
+        .json({ success: false, error: "Organization name is required" });
+    }
+
+    const trimmedName = name.trim();
+
+    if (trimmedName.length < 2 || trimmedName.length > 100) {
+      return res.status(400).json({
+        success: false,
+        error: "Organization name must be between 2 and 100 characters",
+      });
+    }
+
+    const existingOrg = await Organization.findOne({ name: trimmedName });
+    if (existingOrg) {
+      return res.status(409).json({
+        success: false,
+        error: "Organization with this name already exists",
+      });
+    }
+
+    const organization = new Organization({
+      name: trimmedName,
+      createdBy: actor.userId,
+    });
+
+    await organization.save();
+
+    return res.status(201).json({
+      success: true,
+      message: "Organization created successfully",
       organization: {
         id: organization._id.toString(),
         name: organization.name,

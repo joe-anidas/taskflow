@@ -13,6 +13,13 @@ export interface Task {
   dueDate?: Date | null;
   createdAt: Date;
   updatedAt: Date;
+  attachments?: {
+    _id?: string;
+    name: string;
+    url: string;
+    publicId: string;
+    uploadedAt: Date;
+  }[];
 }
 
 export type TaskFormData = {

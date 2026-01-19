@@ -7,6 +7,8 @@ import {
   updateUser,
   deleteUser,
   getOrganization,
+  getAllOrganizations,
+  createOrganization,
   updateOrganizationName,
   logout,
   forgotPassword,
@@ -55,6 +57,20 @@ router.delete(
 );
 
 router.get("/organization", authenticateToken, getOrganization);
+
+router.get(
+  "/organizations",
+  authenticateToken,
+  authorizeRoles("superadmin"),
+  getAllOrganizations
+);
+
+router.post(
+  "/organizations",
+  authenticateToken,
+  authorizeRoles("superadmin"),
+  createOrganization
+);
 
 router.post("/logout", authenticateToken, logout);
 

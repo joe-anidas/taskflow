@@ -63,7 +63,7 @@ export async function getTasks(
       query.userId = queryUserId;
     }
 
-    if (status && ["todo", "in-progress", "completed"].includes(status)) {
+    if (status && ["todo", "in-progress", "in-review", "completed"].includes(status)) {
       query.status = status;
     }
     if (q && typeof q === "string" && q.trim().length > 0) {
@@ -674,6 +674,148 @@ export async function deleteTask(
         createdAt: task.createdAt,
         updatedAt: task.updatedAt,
       },
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+// ... existing code ...
+
+export async function addAttachments(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const { id } = req.params;
+    const files = req.files as Express.Multer.File[];
+    const actor = req.user!;
+
+    if (!isValidObjectId(id)) {
+      return res
+        .status(400)
+        .json({ success: false, error: "Invalid task identifier" });
+    }
+
+    if (!files || files.length === 0) {
+      return res.status(400).json({ success: false, error: "No files uploaded" });
+    }
+
+    const filters: any = { _id: id };
+    if (actor.role !== "superadmin") {
+      filters.tenantId = actor.tenantId;
+    }
+    if (actor.role === "user") {
+      filters.userId = actor.userId;
+    }
+
+    const task = await Task.findOne(filters);
+    if (!task) {
+      return res.status(404).json({ success: false, error: "Task not found" });
+    }
+
+    // Process files and upload to Cloudinary
+    // Note: Since we use diskStorage or memoryStorage (if changed), we need to handle the upload to Cloudinary manually
+    // if using just multer, files are on disk (or memory). 
+    // We should use cloudinary.uploader.upload
+
+    const importCloudinary = await import("../config/cloudinary");
+    const cloudinary = importCloudinary.default;
+    const fs = await import("fs");
+
+    const uploadedAttachments = [];
+
+    for (const file of files) {
+      try {
+        const result = await cloudinary.uploader.upload(file.path, {
+          folder: `taskflow/${task.tenantId}/tasks/${task._id}`,
+          resource_type: "auto",
+        });
+        
+        uploadedAttachments.push({
+          name: file.originalname,
+          url: result.secure_url,
+          publicId: result.public_id,
+          uploadedAt: new Date(),
+        });
+      } finally {
+        // Clean up temp file
+        if (fs.existsSync(file.path)) {
+             fs.unlinkSync(file.path);
+        }
+      }
+    }
+
+    task.attachments = [...(task.attachments || []), ...uploadedAttachments];
+    await task.save();
+
+    res.json({
+      success: true,
+      message: "Attachments added successfully",
+      attachments: uploadedAttachments,
+      task,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function removeAttachment(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const { id, attachmentId } = req.params;
+    const actor = req.user!;
+
+    if (!isValidObjectId(id)) {
+      return res
+        .status(400)
+        .json({ success: false, error: "Invalid task identifier" });
+    }
+
+    const filters: any = { _id: id };
+    if (actor.role !== "superadmin") {
+      filters.tenantId = actor.tenantId;
+    }
+    // Users can remove their own task attachments? Let's assume yes if they created the task or are assigned.
+    if (actor.role === "user") {
+      filters.userId = actor.userId;
+    }
+
+    const task = await Task.findOne(filters);
+    if (!task) {
+      return res.status(404).json({ success: false, error: "Task not found" });
+    }
+
+    const attachmentIndex = task.attachments.findIndex(
+      (att: any) => att._id.toString() === attachmentId
+    );
+
+    if (attachmentIndex === -1) {
+      return res
+        .status(404)
+        .json({ success: false, error: "Attachment not found" });
+    }
+
+    const attachment = task.attachments[attachmentIndex];
+
+    // Remove from Cloudinary
+    const importCloudinary = await import("../config/cloudinary");
+    const cloudinary = importCloudinary.default;
+    
+    if (attachment.publicId) {
+        await cloudinary.uploader.destroy(attachment.publicId);
+    }
+
+    task.attachments.splice(attachmentIndex, 1);
+    await task.save();
+
+    res.json({
+      success: true,
+      message: "Attachment removed successfully",
+      task,
     });
   } catch (err) {
     next(err);

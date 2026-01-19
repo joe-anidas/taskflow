@@ -7,6 +7,7 @@ interface AssignTaskForm {
   title: string;
   description: string;
   userId: string;
+  status: "todo" | "in-progress" | "in-review" | "completed";
   priority?: "low" | "medium" | "high";
   dueDate?: string | null;
 }
@@ -108,6 +109,21 @@ export const AssignTaskModal = ({
               placeholder="Enter task description"
             />
             {errors.description && <p className="mt-1 text-sm text-red-600">{errors.description.message}</p>}
+          </div>
+
+          <div>
+            <label htmlFor="taskStatus" className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+            <select
+              {...register("status", { required: true })}
+              id="taskStatus"
+              defaultValue="todo"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+            >
+              <option value="todo">To Do</option>
+              <option value="in-progress">In Progress</option>
+              <option value="in-review">In Review</option>
+              <option value="completed">Completed</option>
+            </select>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

@@ -36,6 +36,13 @@ interface TaskResponse {
   status: TaskStatus;
   createdAt: string | Date;
   updatedAt: string | Date;
+  attachments?: {
+    _id: string;
+    name: string;
+    url: string;
+    publicId: string;
+    uploadedAt: string | Date;
+  }[];
 }
 
 interface TaskListResponse {
@@ -70,6 +77,10 @@ const normalizeTask = (task: TaskResponse): Task => ({
   dueDate: task.dueDate ? new Date(task.dueDate) : null,
   createdAt: new Date(task.createdAt),
   updatedAt: new Date(task.updatedAt),
+  attachments: task.attachments?.map(att => ({
+    ...att,
+    uploadedAt: new Date(att.uploadedAt)
+  })),
 });
 
 export const taskService = {
@@ -116,5 +127,27 @@ export const taskService = {
 
   async deleteTask(id: string): Promise<void> {
     await httpClient.delete(API_ENDPOINTS.TASKS.DELETE(id));
+  },
+
+  async addAttachments(id: string, files: File[]): Promise<Task> {
+    const formData = new FormData();
+    files.forEach((file) => formData.append("files", file));
+
+    // Note: httpClient wrapper needs to handle FormData correctly or we might need to pass headers.
+    // Usually axios handles it if data is FormData.
+    const result = await httpClient.post<TaskUpdateResponse>(
+      `${API_ENDPOINTS.TASKS.UPDATE(id)}/attachments`,
+      formData
+    );
+    const task = result.task || result;
+    return normalizeTask(task as TaskResponse);
+  },
+
+  async removeAttachment(taskId: string, attachmentId: string): Promise<Task> {
+    const result = await httpClient.delete<TaskUpdateResponse>(
+      `${API_ENDPOINTS.TASKS.UPDATE(taskId)}/attachments/${attachmentId}`
+    );
+    const task = result.task || result;
+    return normalizeTask(task as TaskResponse);
   },
 };

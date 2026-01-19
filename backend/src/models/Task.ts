@@ -14,6 +14,12 @@ export interface ITask extends Document {
   dueDate?: Date | null;
   createdAt: Date;
   updatedAt: Date;
+  attachments: {
+    name: string;
+    url: string;
+    publicId: string;
+    uploadedAt: Date;
+  }[];
   isOverdue(): boolean;
 }
 
@@ -74,7 +80,15 @@ const taskSchema = new Schema<ITask, ITaskModel>(
     dueDate: { type: Date, default: null },
     createdAt: { type: Date, default: Date.now, index: true },
     updatedAt: { type: Date, default: Date.now },
-  },
+    attachments: [
+      {
+        name: { type: String, required: true },
+        url: { type: String, required: true },
+        publicId: { type: String, required: true },
+        uploadedAt: { type: Date, default: Date.now },
+      },
+    ],
+  }, 
   { timestamps: true }
 );
 

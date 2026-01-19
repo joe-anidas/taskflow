@@ -98,7 +98,7 @@ export const AnalyticsDashboard = () => {
           className="bg-white p-6 rounded-xl shadow-sm border border-gray-100"
         >
           <h3 className="text-lg font-semibold text-gray-800 mb-4">Task Status Distribution</h3>
-          <div className="h-64">
+          <div className="h-64 w-full" style={{ minHeight: "250px" }}>
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
@@ -130,7 +130,7 @@ export const AnalyticsDashboard = () => {
            className="bg-white p-6 rounded-xl shadow-sm border border-gray-100"
         >
           <h3 className="text-lg font-semibold text-gray-800 mb-4">Member Workload</h3>
-          <div className="h-64">
+          <div className="h-64 w-full" style={{ minHeight: "250px" }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={workload} layout="vertical" margin={{ left: 40 }}>
                 <XAxis type="number" hide />

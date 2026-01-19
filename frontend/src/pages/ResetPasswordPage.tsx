@@ -47,7 +47,7 @@ export const ResetPasswordPage = () => {
     try {
       const response = await fetch(
         `${
-          import.meta.env.VITE_BACKEND_API_URL || "http://localhost:3000"
+          import.meta.env.BACKEND_API_URL || "http://localhost:3000"
         }/api/auth/reset-password`,
         {
           method: "POST",

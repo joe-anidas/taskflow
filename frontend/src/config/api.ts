@@ -2,11 +2,11 @@
  * API Configuration
  */
 export const API_BASE_URL =
-  import.meta.env.VITE_BACKEND_API_URL || "http://localhost:3000";
+  import.meta.env.BACKEND_API_URL || "http://localhost:3000";
 
 if (!API_BASE_URL) {
   console.error(
-    "VITE_BACKEND_API_URL is not set; defaulting to http://localhost:3000"
+    "BACKEND_API_URL is not set; defaulting to http://localhost:3000"
   );
 }
 
@@ -21,6 +21,8 @@ export const API_ENDPOINTS = {
     UPDATE_USER: (id: string) => `/api/auth/users/${id}`,
     DELETE_USER: (id: string) => `/api/auth/users/${id}`,
     ORGANIZATION: "/api/auth/organization",
+    ALL_ORGANIZATIONS: "/api/auth/organizations",
+    CREATE_ORGANIZATION: "/api/auth/organizations",
   },
   TASKS: {
     LIST: "/api/tasks",

@@ -1,4 +1,4 @@
-import type { Task, TaskStatus } from "../../../types/task";
+import type { Task } from "../../../types/task";
 import { Button } from "../../ui/button";
 import {
   STATUS_COLORS,
@@ -12,7 +12,7 @@ interface TaskCardProps {
   task: Task;
   onEdit: (task: Task) => void;
   onDelete: (id: string) => void;
-  onStatusChange?: (id: string, status: TaskStatus) => void;
+
   isAssignedTask?: boolean; // Legacy prop, we'll use user check now
 }
 
@@ -20,7 +20,6 @@ export const TaskCard = ({
   task,
   onEdit,
   onDelete,
-  onStatusChange,
 }: TaskCardProps) => {
   const { user } = useAuthStore();
   
@@ -35,7 +34,6 @@ export const TaskCard = ({
   // Permissions
   const canEdit = isCreator; // Only creator can edit details
   const canDelete = isCreator; // Only creator can delete
-  const canChangeStatus = isCreator || isAssignedToMe; // Both can change status
 
   const isOverdue =
     task.dueDate &&
@@ -99,27 +97,11 @@ export const TaskCard = ({
         </div>
 
         <div className="flex items-center justify-between pt-2 mt-auto">
-           {canChangeStatus && onStatusChange ? (
-              <select
-                value={task.status}
-                onChange={(e) => onStatusChange(task.id, e.target.value as TaskStatus)}
-                onClick={(e) => e.stopPropagation()} 
-                className={`h-6 text-[10px] font-medium rounded border-gray-200 bg-white focus:ring-1 focus:ring-blue-500 cursor-pointer ${
-                  task.status === 'completed' ? 'text-green-700 bg-green-50' :
-                  task.status === 'in-progress' ? 'text-blue-700 bg-blue-50' : 
-                  task.status === 'in-review' ? 'text-purple-700 bg-purple-50' : 'text-gray-700 bg-gray-50'
-                }`}
-              >
-                <option value="todo">To Do</option>
-                <option value="in-progress">In Progress</option>
-                <option value="in-review">In Review</option>
-                <option value="completed">Done</option>
-              </select>
-           ) : (
+
               <span className={`text-[10px] px-2 py-0.5 rounded font-medium ${STATUS_COLORS[task.status]}`}>
                 {STATUS_LABELS[task.status]}
               </span>
-           )}
+
            
            {task.dueDate && (
              <span className={`text-[10px] font-medium flex items-center gap-1 ${

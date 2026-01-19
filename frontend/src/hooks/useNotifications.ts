@@ -80,8 +80,8 @@ export function useNotifications() {
     
     // Listen for FCM foreground messages
     onMessageListener()
-      .then((payload: any) => {
-         const { title, body } = payload?.notification || {};
+      .then((payload: unknown) => {
+         const { title, body } = (payload as { notification?: { title: string; body: string } })?.notification || {};
          if (title) {
             toast(title, { description: body });
          }
@@ -108,7 +108,7 @@ export function useNotifications() {
     );
 
     // Request current unread notifications
-    notificationService.getUnread();
+
 
     // Cleanup on unmount or auth change
     return () => {

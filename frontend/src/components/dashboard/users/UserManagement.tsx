@@ -2,12 +2,11 @@ import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui";
 import { UserList } from "./UserList";
 import { CreateUserModal } from "../modals/CreateUserModal";
+import { CreateOrganizationModal } from "../modals/CreateOrganizationModal";
 import { EditUserModal } from "../modals/EditUserModal";
-import { AssignTaskModal } from "../modals/AssignTaskModal";
 import { useAuthStore } from "@/store";
 import { httpClient } from "@/lib/httpClient";
 import { API_ENDPOINTS } from "@/config/api";
-import { taskService } from "@/services/api/taskService";
 import type { User } from "@/types/user";
 
 // Interfaces for forms
@@ -16,20 +15,17 @@ interface CreateUserForm {
   email: string;
   password: string;
   role: "user" | "tenantAdmin" | "superadmin";
+  tenantId?: string;
+}
+
+interface CreateOrgForm {
+  name: string;
 }
 
 interface EditUserForm {
   name: string;
   email: string;
   role: "user" | "tenantAdmin" | "superadmin";
-}
-
-interface AssignTaskForm {
-  title: string;
-  description: string;
-  userId: string;
-  priority?: "low" | "medium" | "high";
-  dueDate?: string | null;
 }
 
 export const UserManagement = () => {
@@ -42,7 +38,7 @@ export const UserManagement = () => {
   const [usersError, setUsersError] = useState<string | null>(null);
 
   const [showCreateUser, setShowCreateUser] = useState(false);
-  const [showAssignTask, setShowAssignTask] = useState(false);
+  const [showCreateOrg, setShowCreateOrg] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
 
@@ -97,6 +93,21 @@ export const UserManagement = () => {
     }
   };
 
+  const handleCreateOrg = async (data: CreateOrgForm) => {
+    setFormLoading(true);
+    setFormError(null);
+    try {
+      await httpClient.post(API_ENDPOINTS.AUTH.CREATE_ORGANIZATION, data);
+      setSuccess(`Organization "${data.name}" created successfully!`);
+      setShowCreateOrg(false);
+      // We don't need to reload users, but user might want to create a user for this org immediately.
+    } catch (err) {
+       setFormError(err instanceof Error ? err.message : "Failed to create organization");
+    } finally {
+      setFormLoading(false);
+    }
+  };
+
   const handleEditUser = async (data: EditUserForm) => {
     if (!editingUser) return;
     setFormLoading(true);
@@ -130,38 +141,6 @@ export const UserManagement = () => {
     }
   };
 
-  const handleAssignTask = async (data: AssignTaskForm) => {
-    setFormLoading(true);
-    setFormError(null);
-    try {
-      const selectedUser = users.find(
-        (u) => u.id === data.userId || u._id === data.userId
-      );
-      if (!selectedUser) throw new Error("Selected user not found");
-
-      if (isTenantAdmin && selectedUser.tenantId !== user?.tenantId) {
-        throw new Error("Cannot assign tasks to users outside your tenant");
-      }
-
-      await taskService.createTask({
-        title: data.title,
-        description: data.description,
-        userId: selectedUser.id || selectedUser._id,
-        tenantId: user?.tenantId || undefined,
-        status: "todo",
-        priority: data.priority || "medium",
-        dueDate: data.dueDate || null,
-      });
-
-      setSuccess(`Task "${data.title}" assigned successfully!`);
-      setShowAssignTask(false);
-    } catch (err) {
-      setFormError(err instanceof Error ? err.message : "Failed to assign task");
-    } finally {
-      setFormLoading(false);
-    }
-  };
-
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
@@ -169,15 +148,15 @@ export const UserManagement = () => {
            {isSuperAdmin ? "All System Users" : "Organization Members"}
          </h2>
          <div className="flex gap-3">
-           {isTenantAdmin && (
-              <Button onClick={() => setShowAssignTask(true)}>
-                Assign New Task
-              </Button>
-           )}
            {isSuperAdmin && (
-              <Button onClick={() => setShowCreateUser(true)}>
-                Create User
-              </Button>
+              <>
+                <Button variant="outline" onClick={() => setShowCreateOrg(true)}>
+                  Create Org
+                </Button>
+                <Button onClick={() => setShowCreateUser(true)}>
+                  Create User
+                </Button>
+              </>
            )}
          </div>
       </div>
@@ -208,6 +187,15 @@ export const UserManagement = () => {
         onSubmit={handleCreateUser}
         isLoading={formLoading}
         error={formError}
+        isSuperAdmin={isSuperAdmin}
+      />
+
+      <CreateOrganizationModal
+        isOpen={showCreateOrg}
+        onClose={() => { setShowCreateOrg(false); setFormError(null); }}
+        onSubmit={handleCreateOrg}
+        isLoading={formLoading}
+        error={formError}
       />
 
       <EditUserModal
@@ -218,15 +206,6 @@ export const UserManagement = () => {
         isLoading={formLoading}
         error={formError}
         isSuperAdmin={isSuperAdmin}
-      />
-
-      <AssignTaskModal
-        isOpen={showAssignTask}
-        onClose={() => { setShowAssignTask(false); setFormError(null); }}
-        users={filteredUsers}
-        onSubmit={handleAssignTask}
-        isLoading={formLoading}
-        error={formError}
       />
     </div>
   );

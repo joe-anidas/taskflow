@@ -317,9 +317,20 @@ class NotificationService {
     body: string,
     data?: any
   ) {
+    console.log(`🚀 Attempting to send push to user: ${userId}`);
     try {
       const user = await User.findById(userId);
-      if (!user || !user.fcmTokens || user.fcmTokens.length === 0) return;
+      if (!user) {
+        console.warn(`⚠️ User not found for push: ${userId}`);
+        return;
+      }
+      
+      if (!user.fcmTokens || user.fcmTokens.length === 0) {
+        console.warn(`⚠️ No FCM tokens for user: ${userId} (${user.email})`);
+        return;
+      }
+
+      console.log(`📱 Found ${user.fcmTokens.length} tokens for user ${userId}`);
 
       const message = {
         notification: {
@@ -327,41 +338,53 @@ class NotificationService {
           body,
         },
         data: {
-          ...data.metadata,
+          ...(data.metadata || {}), // Ensure metadata is object
           taskId: data.taskId || "",
           type: data.type || "INFO",
-          click_action: "FLUTTER_NOTIFICATION_CLICK" // Standard often used, or custom
+          click_action: "FLUTTER_NOTIFICATION_CLICK" 
         },
         tokens: user.fcmTokens,
       };
 
-      // Import messaging dynamically or assumes imported at top
-      const { messaging } = await import("../config/firebase");
-      
-      if (typeof messaging === 'function') {
-         // It's the admin.messaging namespace/function
-         // Actually admin.messaging() returns the service.
-         // And messaging().sendMulticast handles tokens array.
-         const response = await messaging().sendEachForMulticast(message);
-         
-         if (response.failureCount > 0) {
-            const failedTokens: string[] = [];
-            response.responses.forEach((resp, idx) => {
-              if (!resp.success) {
-                failedTokens.push(user.fcmTokens[idx]);
-              }
-            });
-            
-            // Clean up invalid tokens
-            if (failedTokens.length > 0) {
-                await User.findByIdAndUpdate(userId, {
-                    $pull: { fcmTokens: { $in: failedTokens } }
+      // Import messaging dynamically
+      try {
+          const { messaging } = await import("../config/firebase");
+          
+          if (messaging) {
+             console.log(`📨 Sending multicast message to ${user.fcmTokens.length} tokens`);
+             const response = await messaging.sendEachForMulticast(message);
+             console.log(`✅ FCM Response: Success=${response.successCount}, Failure=${response.failureCount}`);
+             
+             if (response.failureCount > 0) {
+                const failedTokens: string[] = [];
+                response.responses.forEach((resp, idx) => {
+                  if (!resp.success) {
+                    const error = resp.error;
+                    console.error(`❌ FCM Send Error for token ${idx}:`, error?.code, error?.message);
+                    // Only remove if it's a permanent error
+                    if (error?.code === 'messaging/invalid-registration-token' ||
+                        error?.code === 'messaging/registration-token-not-registered') {
+                        failedTokens.push(user.fcmTokens[idx]);
+                    }
+                  }
                 });
-            }
-         }
+                
+                // Clean up invalid tokens
+                if (failedTokens.length > 0) {
+                    console.log(`🗑️ Removing ${failedTokens.length} invalid tokens`);
+                    await User.findByIdAndUpdate(userId, {
+                        $pull: { fcmTokens: { $in: failedTokens } }
+                    });
+                }
+             }
+          } else {
+              console.error("❌ Messaging service not available (import failed or null)");
+          }
+      } catch (importError) {
+          console.error("❌ Error importing/using Firebase messaging:", importError);
       }
     } catch (error) {
-      console.error(`Error sending push to user ${userId}:`, error);
+      console.error(`❌ Global error sending push to user ${userId}:`, error);
     }
   }
 

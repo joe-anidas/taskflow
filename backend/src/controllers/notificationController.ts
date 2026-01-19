@@ -242,12 +242,15 @@ export async function registerFcmToken(
     const actor = req.user!;
 
     if (!token) {
+       console.warn(`[FCM] Token missing in registration request from user ${actor.userId}`);
        return res.status(400).json({
          success: false,
          error: "Validation error",
          message: "Token is required",
        });
     }
+
+    console.log(`[FCM] Registering token for user ${actor.userId}: ${token.substring(0, 10)}... (Length: ${token.length})`);
 
     await User.findByIdAndUpdate(actor.userId, {
       $addToSet: { fcmTokens: token }

@@ -39,6 +39,7 @@ export const TaskList = ({
       all: tasks.length,
       todo: tasks.filter((t) => t.status === "todo").length,
       "in-progress": tasks.filter((t) => t.status === "in-progress").length,
+      "in-review": tasks.filter((t) => t.status === "in-review").length,
       completed: tasks.filter((t) => t.status === "completed").length,
     }),
     [tasks]
@@ -112,6 +113,13 @@ export const TaskList = ({
             size="sm"
           >
             In Progress ({taskCounts["in-progress"]})
+          </Button>
+          <Button
+            variant={statusFilter === "in-review" ? "default" : "outline"}
+            onClick={() => setStatusFilter("in-review")}
+            size="sm"
+          >
+            In Review ({taskCounts["in-review"]})
           </Button>
           <Button
             variant={statusFilter === "completed" ? "default" : "outline"}

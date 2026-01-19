@@ -1,12 +1,10 @@
-import { Button } from "@/components/ui";
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
 
 interface DashboardHeaderProps {
   isSuperAdmin: boolean;
   isTenantAdmin: boolean;
-  activeView: "overview" | "users";
-  setActiveView: (view: "overview" | "users") => void;
+  activeView: "tasks" | "overview" | "users";
+  setActiveView: (view: "tasks" | "overview" | "users") => void;
   orgName: string;
   onSaveOrgName: (newName: string) => Promise<void>;
   orgLabel: string;
@@ -21,7 +19,6 @@ export const DashboardHeader = ({
   onSaveOrgName,
   orgLabel,
 }: DashboardHeaderProps) => {
-  const navigate = useNavigate();
   const [isEditingOrg, setIsEditingOrg] = useState(false);
   const [orgInput, setOrgInput] = useState(orgName);
   const [isSavingOrg, setIsSavingOrg] = useState(false);
@@ -50,7 +47,7 @@ export const DashboardHeader = ({
           {isSuperAdmin ? "System Administration" : "Tenant Dashboard"}
         </p>
         <h1 className="text-3xl font-bold text-gray-900 tracking-tight">
-          {activeView === "overview" ? "Analytics Overview" : "User Management"}
+          {activeView === "overview" ? "Analytics Overview" : activeView === "users" ? "User Management" : "Task Tracker"}
         </h1>
 
         {!isSuperAdmin && (
@@ -102,6 +99,20 @@ export const DashboardHeader = ({
       </div>
 
       <div className="flex items-center gap-2 bg-gray-50 p-1.5 rounded-lg border border-gray-200">
+        {/* Task Tracker Button (First) */}
+        {!isSuperAdmin && (
+             <button
+            onClick={() => setActiveView("tasks")}
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+              activeView === "tasks"
+                ? "bg-white text-blue-700 shadow-sm ring-1 ring-black/5"
+                : "text-gray-600 hover:text-gray-900 hover:bg-gray-200/50"
+            }`}
+          >
+            Task Tracker
+          </button>
+        )}
+
         {isTenantAdmin && (
           <button
             onClick={() => setActiveView("overview")}
@@ -111,7 +122,7 @@ export const DashboardHeader = ({
                 : "text-gray-600 hover:text-gray-900 hover:bg-gray-200/50"
             }`}
           >
-            Overview
+           Analytics
           </button>
         )}
 
@@ -125,17 +136,6 @@ export const DashboardHeader = ({
         >
           Users
         </button>
-
-        <div className="w-px h-6 bg-gray-300 mx-1"></div>
-
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => navigate("/tasks")}
-          className="text-gray-700 hover:text-blue-600 hover:bg-blue-50"
-        >
-          Go to Tasks →
-        </Button>
       </div>
     </header>
   );

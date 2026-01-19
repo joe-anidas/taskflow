@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Routes, Route, useNavigate } from "react-router-dom";
 import { io, Socket } from "socket.io-client";
@@ -34,8 +34,7 @@ function App() {
   const [userId, setUserId] = useState<string>("user1");
   const [userConnected, setUserConnected] = useState(false);
   const [userTasks, setUserTasks] = useState<Task[]>([]);
-  const [selectedTaskId, setSelectedTaskId] = useState<string>("");
-  const [newStatus, setNewStatus] = useState<TaskStatus>("todo");
+
 
   const navigate = useNavigate();
 
@@ -54,7 +53,7 @@ function App() {
   // Admin connect
   const connectAdmin = () => {
     if (adminSocketRef.current?.connected) return;
-    const socket = io("http://localhost:3001", { withCredentials: true });
+    const socket = io(import.meta.env.VITE_BACKEND_API_URL || "http://localhost:3000", { withCredentials: true });
     adminSocketRef.current = socket;
 
     socket.on("connect", () => {
@@ -91,7 +90,7 @@ function App() {
   // User connect
   const connectUser = () => {
     if (userSocketRef.current?.connected) return;
-    const socket = io("http://localhost:3001", { withCredentials: true });
+    const socket = io(import.meta.env.VITE_BACKEND_API_URL || "http://localhost:3000", { withCredentials: true });
     userSocketRef.current = socket;
 
     socket.on("connect", () => {
@@ -249,25 +248,7 @@ function App() {
     pushNotification("Task assigned", { taskId: task.taskId, to: userId });
   };
 
-  // User: Update task status
-  const updateTaskStatus = () => {
-    if (!selectedTaskId) return;
-    const task = userTasks.find((t) => t.taskId === selectedTaskId);
-    if (!task) return;
 
-    setUserTasks((prev) =>
-      prev.map((t) =>
-        t.taskId === selectedTaskId ? { ...t, status: newStatus } : t
-      )
-    );
-
-    userSocketRef.current?.emit("taskStatusUpdated", {
-      taskId: selectedTaskId,
-      oldStatus: task.status,
-      newStatus,
-      updatedBy: userId,
-    });
-  };
 
   useEffect(() => {
     return () => {
@@ -458,6 +439,35 @@ function App() {
     </div>
   );
 
+  // Drag and Drop Handlers
+  const handleDragStart = (e: React.DragEvent, taskId: string) => {
+    e.dataTransfer.setData("taskId", taskId);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+  };
+
+  const handleDrop = (e: React.DragEvent, newStatus: TaskStatus) => {
+    e.preventDefault();
+    const taskId = e.dataTransfer.getData("taskId");
+    const task = userTasks.find((t) => t.taskId === taskId);
+    if (!task || task.status === newStatus) return;
+
+    setUserTasks((prev) =>
+      prev.map((t) =>
+        t.taskId === taskId ? { ...t, status: newStatus } : t
+      )
+    );
+
+    userSocketRef.current?.emit("taskStatusUpdated", {
+      taskId,
+      oldStatus: task.status,
+      newStatus,
+      updatedBy: userId,
+    });
+  };
+
   const userElement = (
     <div className="w-full px-4 py-8">
       <div className="mx-auto w-full max-w-6xl space-y-6">
@@ -467,7 +477,7 @@ function App() {
               👤 User Dashboard
             </h2>
             <p className="text-gray-600">
-              View assigned tasks and update status instantly.
+              Drag and drop tasks to update status instantly.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -497,143 +507,67 @@ function App() {
           </div>
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-2">
-          <div className="rounded-xl border border-green-200 bg-green-50 p-6 shadow-sm">
-            <h3 className="text-lg font-semibold text-green-900 mb-4">
-              My Tasks
-            </h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {(["todo", "in-progress", "completed"] as TaskStatus[]).map((status) => (
+            <div
+              key={status}
+              className={`rounded-xl border p-4 min-h-[500px] transition-colors flex flex-col gap-4 ${
+                status === "todo"
+                  ? "bg-slate-50 border-slate-200"
+                  : status === "in-progress"
+                  ? "bg-blue-50 border-blue-200"
+                  : "bg-green-50 border-green-200"
+              }`}
+              onDragOver={handleDragOver}
+              onDrop={(e) => handleDrop(e, status)}
+            >
+              <div className="flex items-center justify-between pb-2 border-b border-black/5">
+                <h3 className="font-bold text-gray-700 capitalize">
+                  {status === "in-progress" ? "In Progress" : status}
+                </h3>
+                <span className="text-xs bg-white px-2 py-1 rounded shadow-sm font-semibold text-gray-600">
+                  {userTasks.filter((t) => t.status === status).length}
+                </span>
+              </div>
 
-            {userTasks.length === 0 ? (
-              <p className="text-sm text-gray-600">No tasks assigned yet...</p>
-            ) : (
-              <div className="space-y-3">
-                <div>
-                  <label className="block text-xs font-medium">
-                    Select Task
-                  </label>
-                  <select
-                    className="w-full rounded border p-2"
-                    value={selectedTaskId}
-                    onChange={(e) => setSelectedTaskId(e.target.value)}
-                  >
-                    <option value="">-- Choose a task --</option>
-                    {userTasks.map((task) => (
-                      <option key={task.taskId} value={task.taskId}>
-                        {task.title} ({task.status})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {selectedTaskId &&
-                  (() => {
-                    const task = userTasks.find(
-                      (t) => t.taskId === selectedTaskId
-                    );
-                    return task ? (
-                      <div className="rounded bg-white p-3 space-y-2 border border-gray-200">
-                        <div>
-                          <div className="text-xs font-medium text-gray-700">
-                            Title
-                          </div>
-                          <div className="font-semibold">{task.title}</div>
-                        </div>
-                        <div>
-                          <div className="text-xs font-medium text-gray-700">
-                            Description
-                          </div>
-                          <div className="text-sm">{task.description}</div>
-                        </div>
-                        <div>
-                          <div className="text-xs font-medium text-gray-700">
-                            Due Date
-                          </div>
-                          <div className="text-sm text-orange-600 font-bold">
-                            📅 {task.dueDate}
-                          </div>
-                        </div>
-                        <div>
-                          <div className="text-xs font-medium text-gray-700">
-                            Current Status
-                          </div>
-                          <div className="font-mono font-bold text-blue-600">
-                            {task.status}
-                          </div>
-                        </div>
-
-                        <div>
-                          <label className="block text-xs font-medium mb-2">
-                            Update Status
-                          </label>
-                          <div className="flex gap-2 flex-wrap">
-                            {(
-                              [
-                                "todo",
-                                "in-progress",
-                                "completed",
-                              ] as TaskStatus[]
-                            ).map((status) => (
-                              <button
-                                key={status}
-                                onClick={() => setNewStatus(status)}
-                                className={`px-3 py-1 rounded text-xs font-medium ${
-                                  newStatus === status
-                                    ? "bg-green-600 text-white"
-                                    : "bg-gray-200 text-gray-700"
-                                }`}
-                              >
-                                {status === "todo"
-                                  ? "📋 To Do"
-                                  : status === "in-progress"
-                                  ? "🔄 In Progress"
-                                  : "✅ Completed"}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-
-                        <Button
-                          onClick={updateTaskStatus}
-                          disabled={newStatus === task.status || !userConnected}
-                          className="w-full bg-orange-600 hover:bg-orange-700"
-                        >
-                          📤 Update Status
-                        </Button>
+              <div className="flex-1 space-y-3">
+                {userTasks
+                  .filter((t) => t.status === status)
+                  .map((task) => (
+                    <div
+                      key={task.taskId}
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, task.taskId)}
+                      className="bg-white p-4 rounded-lg border border-gray-100 shadow-sm cursor-grab active:cursor-grabbing hover:shadow-md transition-all group"
+                    >
+                      <div className="flex justify-between items-start mb-2">
+                         <div className="font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">
+                            {task.title}
+                         </div>
                       </div>
-                    ) : null;
-                  })()}
-              </div>
-            )}
-          </div>
-
-          <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">
-              All Tasks
-            </h3>
-            {userTasks.length === 0 ? (
-              <p className="text-sm text-gray-600">Nothing assigned yet.</p>
-            ) : (
-              <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
-                {userTasks.map((task) => (
-                  <div
-                    key={task.taskId}
-                    className={`rounded p-3 text-sm border-l-4 ${
-                      task.status === "completed"
-                        ? "border-green-500 bg-green-50 line-through"
-                        : task.status === "in-progress"
-                        ? "border-yellow-500 bg-yellow-50"
-                        : "border-gray-400 bg-white"
-                    }`}
-                  >
-                    <div className="font-semibold">{task.title}</div>
-                    <div className="text-xs text-gray-700">
-                      Due: {task.dueDate}
+                      <p className="text-xs text-gray-500 line-clamp-2 mb-3">
+                        {task.description}
+                      </p>
+                      <div className="flex items-center justify-between text-xs border-t pt-3 border-gray-50">
+                        <span className="text-gray-400 font-mono">
+                           {task.dueDate}
+                        </span>
+                        <div className={`w-2 h-2 rounded-full ${
+                             status === "todo" ? "bg-slate-400" :
+                             status === "in-progress" ? "bg-blue-400" :
+                             "bg-green-400"
+                        }`} />
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                  {userTasks.filter((t) => t.status === status).length === 0 && (
+                      <div className="h-full flex items-center justify-center text-sm text-gray-400 italic border-2 border-dashed border-gray-200 rounded-lg">
+                          Drop items here
+                      </div>
+                  )}
               </div>
-            )}
-          </div>
+            </div>
+          ))}
         </div>
       </div>
     </div>
