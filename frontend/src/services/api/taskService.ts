@@ -5,6 +5,7 @@ import type {
   UpdateTaskData,
   TaskQueryParams,
   TaskPage,
+  TaskPriority,
 } from "@/types/task";
 import { API_ENDPOINTS } from "@/config/api";
 import { httpClient } from "@/lib/httpClient";
@@ -30,7 +31,6 @@ interface TaskResponse {
   userId?: string;
   title: string;
   description: string;
-  status: string;
   priority?: string;
   dueDate?: string | null;
   status: TaskStatus;
@@ -65,8 +65,8 @@ const normalizeTask = (task: TaskResponse): Task => ({
   userId: task.userId,
   title: task.title,
   description: task.description,
-  status: task.status as any,
-  priority: task.priority as any,
+  status: task.status as TaskStatus,
+  priority: task.priority as TaskPriority,
   dueDate: task.dueDate ? new Date(task.dueDate) : null,
   createdAt: new Date(task.createdAt),
   updatedAt: new Date(task.updatedAt),

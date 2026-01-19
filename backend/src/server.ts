@@ -1,12 +1,20 @@
 import express from "express";
 import mongoose from "mongoose";
 import cors from "cors";
+import http from "http";
 import { CORS_ORIGIN, MONGO_URI, PORT } from "./config/env";
 import authRoutes from "./routes/authRoutes";
 import taskRoutes from "./routes/taskRoutes";
+import notificationRoutes from "./routes/notificationRoutes";
+import analyticsRoutes from "./routes/analyticsRoutes";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
+import { notificationService } from "./notification";
+import { initializeFirebase } from "./config/firebase";
 
 const app = express();
+
+// Initialize Firebase Admin
+initializeFirebase();
 
 const allowedOrigins = new Set([
   "http://localhost:5173",
@@ -15,6 +23,8 @@ const allowedOrigins = new Set([
   "http://127.0.0.1:4173",
   ...CORS_ORIGIN,
 ]);
+
+const allowedOriginsArray = Array.from(allowedOrigins);
 
 const corsOptions = {
   origin: (
@@ -63,12 +73,20 @@ app.get("/", (_req, res) => {
 });
 
 app.use("/api/auth", authRoutes);
+app.use("/api/notifications", notificationRoutes);
 app.use("/api/tasks", taskRoutes);
+app.use("/api/analytics", analyticsRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);
 
-const server = app.listen(PORT, () => {
+// Create HTTP server
+const httpServer = http.createServer(app);
+
+// Initialize notification service with Socket.IO
+notificationService.initialize(httpServer, allowedOriginsArray);
+
+const server = httpServer.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
   console.log(`📚 API documentation available at http://localhost:${PORT}/api`);
 });

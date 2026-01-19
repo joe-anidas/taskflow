@@ -37,6 +37,14 @@ export const LoginPage = () => {
     },
   });
 
+  const { ref: passwordFieldRef, ...passwordField } = register("password", {
+    required: "Password is required",
+    minLength: {
+      value: 6,
+      message: "Password must be at least 6 characters",
+    },
+  });
+
   const onSubmit = async (data: LoginFormData) => {
     setIsLoading(true);
     setError(null);
@@ -120,14 +128,11 @@ export const LoginPage = () => {
                 </label>
                 <div className="relative">
                   <input
-                    ref={passwordInputRef}
-                    {...register("password", {
-                      required: "Password is required",
-                      minLength: {
-                        value: 6,
-                        message: "Password must be at least 6 characters",
-                      },
-                    })}
+                    {...passwordField}
+                    ref={(el) => {
+                      passwordFieldRef(el);
+                      passwordInputRef.current = el;
+                    }}
                     id="password"
                     type={showPassword ? "text" : "password"}
                     autoComplete="current-password"

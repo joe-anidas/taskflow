@@ -1,6 +1,6 @@
 import mongoose, { Schema, Document, Model } from "mongoose";
 
-export type TaskStatus = "todo" | "in-progress" | "completed";
+export type TaskStatus = "todo" | "in-progress" | "in-review" | "completed";
 export type TaskPriority = "low" | "medium" | "high";
 
 export interface ITask extends Document {
@@ -9,6 +9,7 @@ export interface ITask extends Document {
   status: TaskStatus;
   priority: TaskPriority;
   userId: mongoose.Types.ObjectId;
+  createdBy: mongoose.Types.ObjectId;
   tenantId: mongoose.Types.ObjectId;
   dueDate?: Date | null;
   createdAt: Date;
@@ -41,8 +42,8 @@ const taskSchema = new Schema<ITask, ITaskModel>(
     status: {
       type: String,
       enum: {
-        values: ["todo", "in-progress", "completed"],
-        message: "Status must be one of: todo, in-progress, completed",
+        values: ["todo", "in-progress", "in-review", "completed"],
+        message: "Status must be one of: todo, in-progress, in-review, completed",
       },
       default: "todo",
       lowercase: true,
@@ -56,6 +57,12 @@ const taskSchema = new Schema<ITask, ITaskModel>(
       type: Schema.Types.ObjectId,
       ref: "User",
       required: [true, "User ID is required"],
+      index: true,
+    },
+    createdBy: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      required: [true, "Creator ID is required"],
       index: true,
     },
     tenantId: {

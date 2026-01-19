@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/store";
 import { Button } from "@/components/ui";
+import NotificationBell from "./NotificationBell";
 
 export default function Navbar() {
   const navigate = useNavigate();
@@ -24,6 +25,7 @@ export default function Navbar() {
           <div className="flex items-center gap-3">
             {isAuthenticated ? (
               <>
+                <NotificationBell />
                 {user && (
                   <span className="text-sm text-gray-600 hidden sm:block">
                     Welcome, {user.name}

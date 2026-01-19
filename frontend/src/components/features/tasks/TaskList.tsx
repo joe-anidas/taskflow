@@ -8,16 +8,19 @@ interface TaskListProps {
   tasks: Task[];
   onEdit: (task: Task) => void;
   onDelete: (id: string) => void;
+  onStatusChange?: (id: string, status: TaskStatus) => void;
   page?: number;
   totalPages?: number;
   onPrevPage?: () => void;
   onNextPage?: () => void;
+  isAssignedView?: boolean;
 }
 
 export const TaskList = ({
   tasks,
   onEdit,
   onDelete,
+  onStatusChange,
   page = 1,
   totalPages = 1,
   onPrevPage,
@@ -199,9 +202,9 @@ export const TaskList = ({
           </svg>
           <h3 className="mt-2 text-sm font-medium text-gray-900">No tasks</h3>
           <p className="mt-1 text-sm text-gray-500">
-            {filter === "all"
+            {statusFilter === "all"
               ? "Get started by creating a new task."
-              : `No ${filter} tasks found.`}
+              : `No ${statusFilter} tasks found.`}
           </p>
         </div>
       ) : (
@@ -213,6 +216,7 @@ export const TaskList = ({
                 task={task}
                 onEdit={onEdit}
                 onDelete={onDelete}
+                onStatusChange={onStatusChange}
               />
             ))}
           </div>

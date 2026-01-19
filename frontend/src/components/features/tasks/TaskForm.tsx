@@ -36,7 +36,7 @@ export const TaskForm = ({
           description: "",
           status: "todo",
           priority: "medium",
-          dueDate: null,
+          dueDate: new Date().toISOString().split("T")[0],
         },
   });
 

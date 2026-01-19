@@ -28,6 +28,18 @@ export const API_ENDPOINTS = {
     UPDATE: (id: string) => `/api/tasks/${id}`,
     DELETE: (id: string) => `/api/tasks/${id}`,
   },
+  NOTIFICATIONS: {
+    LIST: "/api/notifications",
+    UNREAD_COUNT: "/api/notifications/unread-count",
+    MARK_READ: "/api/notifications/mark-read",
+    MARK_ALL_READ: "/api/notifications/mark-all-read",
+    DELETE: (id: string) => `/api/notifications/${id}`,
+    DELETE_ALL_READ: "/api/notifications",
+  },
+  ANALYTICS: {
+    STATS: "/api/analytics/stats",
+    WORKLOAD: "/api/analytics/workload",
+  },
 } as const;
 
 export const STORAGE_KEYS = {

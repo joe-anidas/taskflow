@@ -4,6 +4,7 @@
 export const TASK_STATUS = {
   TODO: "todo",
   IN_PROGRESS: "in-progress",
+  IN_REVIEW: "in-review",
   COMPLETED: "completed",
 } as const;
 
@@ -16,12 +17,14 @@ export const TASK_PRIORITY = {
 export const STATUS_COLORS: Record<string, string> = {
   todo: "bg-gray-100 text-gray-800",
   "in-progress": "bg-blue-100 text-blue-800",
+  "in-review": "bg-purple-100 text-purple-800",
   completed: "bg-green-100 text-green-800",
 };
 
 export const STATUS_LABELS: Record<string, string> = {
   todo: "To Do",
   "in-progress": "In Progress",
+  "in-review": "In Review",
   completed: "Completed",
 };
 
