@@ -5,7 +5,7 @@ import type { User } from "@/types/user";
 
 interface AssignTaskForm {
   title: string;
-  description: string;
+  description?: string;
   userId: string;
   status: "todo" | "in-progress" | "in-review" | "completed";
   priority?: "low" | "medium" | "high";

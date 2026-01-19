@@ -12,7 +12,7 @@ type TaskStatus = "todo" | "in-progress" | "completed";
 interface Task {
   taskId: string;
   title: string;
-  description: string;
+  description?: string;
   assignedTo: string;
   status: TaskStatus;
   dueDate: string;

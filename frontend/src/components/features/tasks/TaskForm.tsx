@@ -2,6 +2,7 @@ import { useForm } from "react-hook-form";
 import type { Task, TaskFormData, TaskStatus } from "../../../types/task";
 import { Button } from "../../ui/button";
 import { TASK_VALIDATION, PRIORITY_LABELS } from "../../../constants/task";
+import { formatDateInputIST, getTomorrowIST } from "../../../utils/date";
 
 interface TaskFormProps {
   task?: Task | null;
@@ -30,7 +31,7 @@ export const TaskForm = ({
           status: task.status,
           priority: task.priority || "medium",
           dueDate: task.dueDate
-            ? new Date(task.dueDate).toISOString().split("T")[0]
+            ? formatDateInputIST(task.dueDate)
             : null,
         }
       : {
@@ -38,7 +39,7 @@ export const TaskForm = ({
           description: "",
           status: defaultStatus || "todo",
           priority: "medium",
-          dueDate: new Date().toISOString().split("T")[0],
+          dueDate: getTomorrowIST(),
         },
   });
 
@@ -79,13 +80,12 @@ export const TaskForm = ({
             htmlFor="description"
             className="block text-sm font-medium text-gray-700 mb-1"
           >
-            Description *
+            Description
           </label>
           <textarea
             id="description"
             rows={3}
             {...register("description", {
-              required: "Description is required",
               minLength: {
                 value: TASK_VALIDATION.DESCRIPTION_MIN_LENGTH,
                 message: `Description must be at least ${TASK_VALIDATION.DESCRIPTION_MIN_LENGTH} characters`,

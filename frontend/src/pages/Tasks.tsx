@@ -12,7 +12,7 @@ import { taskService } from "@/services/api/taskService";
 
 interface AssignTaskForm {
   title: string;
-  description: string;
+  description?: string;
   userId: string;
   priority?: "low" | "medium" | "high";
   dueDate?: string | null;

@@ -332,13 +332,32 @@ class NotificationService {
 
       console.log(`📱 Found ${user.fcmTokens.length} tokens for user ${userId}`);
 
+      // Convert metadata to string values (FCM requires all data values to be strings)
+      const stringifyMetadata = (obj: any): Record<string, string> => {
+        const result: Record<string, string> = {};
+        if (obj && typeof obj === 'object') {
+          for (const [key, value] of Object.entries(obj)) {
+            if (value === null || value === undefined) {
+              result[key] = '';
+            } else if (value instanceof Date) {
+              result[key] = value.toISOString();
+            } else if (typeof value === 'object') {
+              result[key] = JSON.stringify(value);
+            } else {
+              result[key] = String(value);
+            }
+          }
+        }
+        return result;
+      };
+
       const message = {
         notification: {
           title,
           body,
         },
         data: {
-          ...(data.metadata || {}), // Ensure metadata is object
+          ...stringifyMetadata(data.metadata || {}),
           taskId: data.taskId || "",
           type: data.type || "INFO",
           click_action: "FLUTTER_NOTIFICATION_CLICK" 

@@ -7,9 +7,11 @@ import authRoutes from "./routes/authRoutes";
 import taskRoutes from "./routes/taskRoutes";
 import notificationRoutes from "./routes/notificationRoutes";
 import analyticsRoutes from "./routes/analyticsRoutes";
+import sprintRoutes from "./routes/sprintRoutes";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
 import { notificationService } from "./notification";
 import { initializeFirebase } from "./config/firebase";
+import { checkTaskDueDates } from "./utils/taskScheduler";
 
 const app = express();
 
@@ -28,31 +30,21 @@ const allowedOrigins = new Set([
 
 const allowedOriginsArray = Array.from(allowedOrigins);
 
-const corsOptions = {
-  origin: (
-    origin: string | undefined,
-    callback: (err: Error | null, allow?: boolean) => void
-  ) => {
-    if (!origin || allowedOrigins.has(origin)) {
-      return callback(null, true);
-    }
-    return callback(new Error("Not allowed by CORS"));
-  },
-  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
-  credentials: true,
-};
+// ========================================
+// BASIC MIDDLEWARE
+// ========================================
 
-app.use(cors(corsOptions));
+// Basic CORS
+app.use(
+  cors({
+    origin: allowedOriginsArray,
+    credentials: true,
+  }),
+);
 
-app.use((req, res, next) => {
-  if (req.method === "OPTIONS") {
-    return res.sendStatus(204);
-  }
-  next();
-});
-
+// Body parsing
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 mongoose
   .connect(MONGO_URI)
@@ -74,9 +66,15 @@ app.get("/", (_req, res) => {
   });
 });
 
+// ========================================
+// API ROUTES
+// ========================================
+
+// Main route handlers
 app.use("/api/auth", authRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/tasks", taskRoutes);
+app.use("/api/sprints", sprintRoutes);
 app.use("/api/analytics", analyticsRoutes);
 
 app.use(notFoundHandler);
@@ -91,6 +89,23 @@ notificationService.initialize(httpServer, allowedOriginsArray);
 const server = httpServer.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
   console.log(`📚 API documentation available at http://localhost:${PORT}/api`);
+  
+  // Set up periodic due date checks (runs every hour)
+  // This ensures tasks that become due within 1 day get notified as time passes
+  setInterval(async () => {
+    try {
+      await checkTaskDueDates();
+    } catch (error) {
+      console.error("Error in scheduled due date check:", error);
+    }
+  }, 60 * 60 * 1000); // Run every hour (60 minutes * 60 seconds * 1000 milliseconds)
+  
+  // Also run immediately on server start
+  checkTaskDueDates().catch((error) => {
+    console.error("Error in initial due date check:", error);
+  });
+  
+  console.log("✅ Due date notification scheduler started (checks every hour)");
 });
 
 process.on("SIGTERM", () => {

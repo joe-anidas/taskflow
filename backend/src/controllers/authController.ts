@@ -20,13 +20,13 @@ const buildAuthToken = (user: IUser) =>
       role: user.role,
       tenantId: user.tenantId ? user.tenantId.toString() : undefined,
     },
-    { expiresIn: "7d" }
+    { expiresIn: "7d" },
   );
 
 export async function register(
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) {
   try {
     const {
@@ -196,7 +196,7 @@ export async function login(req: Request, res: Response, next: NextFunction) {
 export async function createTenantUser(
   req: AuthenticatedRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) {
   try {
     const actor = req.user;
@@ -219,10 +219,10 @@ export async function createTenantUser(
     };
 
     console.log("[createTenantUser] Request:", {
-       actorId: actor.userId,
-       actorRole: actor.role,
-       requestedRole,
-       bodyTenantId
+      actorId: actor.userId,
+      actorRole: actor.role,
+      requestedRole,
+      bodyTenantId,
     });
 
     if (!name || !email || !password) {
@@ -267,18 +267,18 @@ export async function createTenantUser(
       }
       tenantId = bodyTenantId;
       role = requestedRole === "tenantAdmin" ? "tenantAdmin" : "user";
-      
+
       // Enforce single tenant admin rule
       if (role === "tenantAdmin") {
-        const existingAdmin = await User.findOne({ 
-          tenantId, 
-          role: "tenantAdmin" 
+        const existingAdmin = await User.findOne({
+          tenantId,
+          role: "tenantAdmin",
         });
-        
+
         if (existingAdmin) {
-          return res.status(409).json({ 
-            success: false, 
-            error: "This organization already has a Tenant Admin" 
+          return res.status(409).json({
+            success: false,
+            error: "This organization already has a Tenant Admin",
           });
         }
       }
@@ -330,7 +330,7 @@ export async function createTenantUser(
 export async function listUsers(
   req: AuthenticatedRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) {
   try {
     const actor = req.user;
@@ -374,7 +374,7 @@ export async function listUsers(
 export async function getOrganization(
   req: AuthenticatedRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) {
   try {
     const actor = req.user;
@@ -409,7 +409,7 @@ export async function getOrganization(
 export async function getAllOrganizations(
   req: AuthenticatedRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) {
   try {
     const actor = req.user;
@@ -423,10 +423,10 @@ export async function getAllOrganizations(
 
     // Fetch all tenant admins to identify which organizations already have one
     const tenantAdmins = await User.find({ role: "tenantAdmin" }).select(
-      "tenantId"
+      "tenantId",
     );
     const tenantAdminMap = new Set(
-      tenantAdmins.map((u) => u.tenantId?.toString())
+      tenantAdmins.map((u) => u.tenantId?.toString()),
     );
 
     return res.json({
@@ -445,7 +445,7 @@ export async function getAllOrganizations(
 export async function createOrganization(
   req: AuthenticatedRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) {
   try {
     const actor = req.user;
@@ -501,7 +501,7 @@ export async function createOrganization(
 export async function updateOrganizationName(
   req: AuthenticatedRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) {
   try {
     const actor = req.user;
@@ -583,15 +583,26 @@ export async function updateOrganizationName(
   }
 }
 
-export async function logout(_req: Request, res: Response) {
-  // Stateless JWT logout: client should discard token; this is a no-op endpoint.
-  return res.json({ success: true, message: "Logged out" });
+export async function logout(req: AuthenticatedRequest, res: Response) {
+  try {
+    console.log(`✅ User ${req.user?.userId} logged out successfully`);
+
+    return res.json({
+      success: true,
+      message: "Logged out successfully",
+    });
+  } catch (err) {
+    return res.json({
+      success: true,
+      message: "Logged out",
+    });
+  }
 }
 
 export async function forgotPassword(
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) {
   try {
     const { email } = req.body as { email?: string };
@@ -648,7 +659,7 @@ export async function forgotPassword(
 export async function verifyOTP(
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) {
   try {
     const { email, otp } = req.body as { email?: string; otp?: string };
@@ -711,7 +722,7 @@ export async function verifyOTP(
 export async function resetPassword(
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) {
   try {
     const { resetToken, newPassword } = req.body as {
@@ -783,7 +794,7 @@ export async function resetPassword(
 export async function updateUser(
   req: AuthenticatedRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) {
   try {
     const actor = req.user;
@@ -892,7 +903,7 @@ export async function updateUser(
 export async function deleteUser(
   req: AuthenticatedRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) {
   try {
     const actor = req.user;

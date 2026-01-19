@@ -10,21 +10,21 @@ import { AuthenticatedRequest } from "../middleware/auth";
 export async function getTaskStats(
   req: AuthenticatedRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) {
   try {
     const actor = req.user!;
     const { startDate, endDate } = req.query;
 
     const tenantId = new mongoose.Types.ObjectId(actor.tenantId);
-    
+
     // Base match for tenant
     const matchStage: any = { tenantId };
-    
+
     if (startDate || endDate) {
-        matchStage.createdAt = {};
-        if (startDate) matchStage.createdAt.$gte = new Date(startDate as string);
-        if (endDate) matchStage.createdAt.$lte = new Date(endDate as string);
+      matchStage.createdAt = {};
+      if (startDate) matchStage.createdAt.$gte = new Date(startDate as string);
+      if (endDate) matchStage.createdAt.$lte = new Date(endDate as string);
     }
 
     // 1. Status Counts
@@ -42,6 +42,7 @@ export async function getTaskStats(
     const statusCounts = {
       todo: 0,
       "in-progress": 0,
+      "in-review": 0,
       completed: 0,
     };
     statusStats.forEach((s) => {
@@ -52,9 +53,10 @@ export async function getTaskStats(
 
     // 2. Completion Rate (Tasks completed vs Total)
     const totalTasks = Object.values(statusCounts).reduce((a, b) => a + b, 0);
-    const completionRate = totalTasks > 0 
-      ? Math.round((statusCounts.completed / totalTasks) * 100) 
-      : 0;
+    const completionRate =
+      totalTasks > 0
+        ? Math.round((statusCounts.completed / totalTasks) * 100)
+        : 0;
 
     // 3. Due Date Stats (Overdue vs Due Soon)
     const now = new Date();
@@ -62,31 +64,31 @@ export async function getTaskStats(
     sevenDaysFromNow.setDate(now.getDate() + 7);
 
     const dueStats = await Task.aggregate([
-      { 
+      {
         $match: {
           ...matchStage,
           status: { $ne: "completed" },
-          dueDate: { $ne: null }
-        } 
+          dueDate: { $ne: null },
+        },
       },
       {
         $project: {
           isOverdue: { $lt: ["$dueDate", now] },
-          isDueSoon: { 
+          isDueSoon: {
             $and: [
               { $gte: ["$dueDate", now] },
-              { $lte: ["$dueDate", sevenDaysFromNow] }
-            ]
-          }
-        }
+              { $lte: ["$dueDate", sevenDaysFromNow] },
+            ],
+          },
+        },
       },
       {
         $group: {
           _id: null,
           overdue: { $sum: { $cond: ["$isOverdue", 1, 0] } },
-          dueSoon: { $sum: { $cond: ["$isDueSoon", 1, 0] } }
-        }
-      }
+          dueSoon: { $sum: { $cond: ["$isDueSoon", 1, 0] } },
+        },
+      },
     ]);
 
     const dueData = dueStats[0] || { overdue: 0, dueSoon: 0 };
@@ -100,7 +102,7 @@ export async function getTaskStats(
         dueStats: {
           overdue: dueData.overdue,
           dueSoon: dueData.dueSoon,
-        }
+        },
       },
     });
   } catch (err) {
@@ -114,7 +116,7 @@ export async function getTaskStats(
 export async function getWorkloadStats(
   req: AuthenticatedRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) {
   try {
     const actor = req.user!;
@@ -126,15 +128,18 @@ export async function getWorkloadStats(
         $group: {
           _id: "$userId",
           total: { $sum: 1 },
-          completed: { 
-            $sum: { $cond: [{ $eq: ["$status", "completed"] }, 1, 0] } 
+          completed: {
+            $sum: { $cond: [{ $eq: ["$status", "completed"] }, 1, 0] },
           },
-          inProgress: { 
-            $sum: { $cond: [{ $eq: ["$status", "in-progress"] }, 1, 0] } 
+          inProgress: {
+            $sum: { $cond: [{ $eq: ["$status", "in-progress"] }, 1, 0] },
           },
-          todo: { 
-             $sum: { $cond: [{ $eq: ["$status", "todo"] }, 1, 0] } 
-          }
+          inReview: {
+            $sum: { $cond: [{ $eq: ["$status", "in-review"] }, 1, 0] },
+          },
+          todo: {
+            $sum: { $cond: [{ $eq: ["$status", "todo"] }, 1, 0] },
+          },
         },
       },
       {
@@ -154,17 +159,18 @@ export async function getWorkloadStats(
           total: 1,
           completed: 1,
           inProgress: 1,
+          inReview: 1,
           todo: 1,
           completionRate: {
             $cond: [
               { $eq: ["$total", 0] },
               0,
-              { $multiply: [{ $divide: ["$completed", "$total"] }, 100] }
-            ]
-          }
+              { $multiply: [{ $divide: ["$completed", "$total"] }, 100] },
+            ],
+          },
         },
       },
-      { $sort: { total: -1 } }
+      { $sort: { total: -1 } },
     ]);
 
     res.json({

@@ -9,11 +9,13 @@ import {
 } from "../utils/validators";
 import { AuthenticatedRequest } from "../middleware/auth";
 import { notificationService } from "../notification";
+import { parseDateIST, getTomorrowIST } from "../utils/dateUtils";
+import { checkAndNotifyDueSoon } from "../utils/dueDateNotification";
 
 export async function getTasks(
   req: AuthenticatedRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) {
   try {
     const {
@@ -35,7 +37,7 @@ export async function getTasks(
     const parsedPage = Math.max(parseInt(page as string, 10) || 1, 1);
     const parsedLimit = Math.min(
       Math.max(parseInt(limit as string, 10) || 10, 1),
-      100
+      100,
     );
 
     const actor = req.user!;
@@ -63,13 +65,16 @@ export async function getTasks(
       query.userId = queryUserId;
     }
 
-    if (status && ["todo", "in-progress", "in-review", "completed"].includes(status)) {
+    if (
+      status &&
+      ["todo", "in-progress", "in-review", "completed"].includes(status)
+    ) {
       query.status = status;
     }
     if (q && typeof q === "string" && q.trim().length > 0) {
       const regex = new RegExp(
         q.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
-        "i"
+        "i",
       );
       query.$or = [{ title: regex }, { description: regex }];
     }
@@ -101,6 +106,10 @@ export async function getTasks(
         title: task.title,
         description: task.description,
         status: task.status,
+        priority: task.priority,
+        sprintId: task.sprintId?.toString() || null,
+        dueDate: task.dueDate,
+        attachments: task.attachments,
         createdAt: task.createdAt,
         updatedAt: task.updatedAt,
       })),
@@ -113,7 +122,7 @@ export async function getTasks(
 export async function getTask(
   req: AuthenticatedRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) {
   try {
     const { id } = req.params;
@@ -147,6 +156,10 @@ export async function getTask(
         title: task.title,
         description: task.description,
         status: task.status,
+        priority: task.priority,
+        sprintId: task.sprintId?.toString() || null,
+        dueDate: task.dueDate,
+        attachments: task.attachments,
         createdAt: task.createdAt,
         updatedAt: task.updatedAt,
       },
@@ -159,21 +172,25 @@ export async function getTask(
 export async function createTask(
   req: AuthenticatedRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) {
   try {
     const {
       title,
       description = "",
       status = "todo",
+      priority = "medium",
       dueDate,
+      sprintId,
       userId: bodyUserId,
       tenantId: bodyTenantId,
     } = req.body as {
       title?: string;
       description?: string;
       status?: string;
+      priority?: string;
       dueDate?: string | null;
+      sprintId?: string | null;
       userId?: string;
       tenantId?: string;
     };
@@ -215,15 +232,26 @@ export async function createTask(
         .json({ success: false, error: statusCheck.message });
     }
 
+    if (!["low", "medium", "high"].includes(priority)) {
+      return res.status(400).json({
+        success: false,
+        error: "Priority must be one of: low, medium, high",
+      });
+    }
+
+    // Parse due date in IST, default to tomorrow if not provided
     let parsedDueDate: Date | null = null;
     if (dueDate) {
-      parsedDueDate = new Date(dueDate);
-      if (isNaN(parsedDueDate.getTime())) {
+      parsedDueDate = parseDateIST(dueDate);
+      if (!parsedDueDate) {
         return res.status(400).json({
           success: false,
           error: "Invalid due date format",
         });
       }
+    } else {
+      // Default to tomorrow in IST when creating a new task
+      parsedDueDate = getTomorrowIST();
     }
 
     let ownerUserId = actor.userId;
@@ -294,7 +322,9 @@ export async function createTask(
       title: (title || "").trim(),
       description: description ? description.trim() : "",
       status,
+      priority,
       dueDate: parsedDueDate,
+      sprintId: sprintId && isValidObjectId(sprintId) ? sprintId : null,
       userId: ownerUserId,
       createdBy: actor.userId,
       tenantId,
@@ -314,6 +344,11 @@ export async function createTask(
       });
     }
 
+    // Check if task is due within 1 day and send notification immediately
+    if (parsedDueDate) {
+      await checkAndNotifyDueSoon(task);
+    }
+
     res.status(201).json({
       success: true,
       message: "Task created successfully",
@@ -325,6 +360,10 @@ export async function createTask(
         title: task.title,
         description: task.description,
         status: task.status,
+        priority: task.priority,
+        sprintId: task.sprintId?.toString() || null,
+        dueDate: task.dueDate,
+        attachments: task.attachments,
         createdAt: task.createdAt,
         updatedAt: task.updatedAt,
       },
@@ -337,7 +376,7 @@ export async function createTask(
 export async function updateTask(
   req: AuthenticatedRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) {
   try {
     const { id } = req.params;
@@ -345,13 +384,17 @@ export async function updateTask(
       title,
       description,
       status,
+      priority,
       dueDate,
+      sprintId,
       userId: newAssigneeId,
     } = req.body as {
       title?: string;
       description?: string;
       status?: string;
+      priority?: string;
       dueDate?: string | null;
+      sprintId?: string | null;
       userId?: string;
     };
 
@@ -407,19 +450,44 @@ export async function updateTask(
       task.status = status as any;
     }
 
-    // 3. Update Due Date
+    // 2.5. Update Priority
+    if (priority !== undefined) {
+      if (!["low", "medium", "high"].includes(priority)) {
+        return res.status(400).json({
+          success: false,
+          error: "Priority must be one of: low, medium, high",
+        });
+      }
+      task.priority = priority as any;
+    }
+
+    // 3. Update Due Date (parse in IST)
     if (dueDate !== undefined) {
       if (dueDate === null) {
         task.dueDate = null;
       } else {
-        const parsedDate = new Date(dueDate);
-        if (isNaN(parsedDate.getTime())) {
+        const parsedDate = parseDateIST(dueDate);
+        if (!parsedDate) {
           return res.status(400).json({
             success: false,
             error: "Invalid due date format",
           });
         }
         task.dueDate = parsedDate;
+      }
+    }
+
+    // 3.5. Update Sprint
+    if (sprintId !== undefined) {
+      if (sprintId === null) {
+        task.sprintId = null;
+      } else if (isValidObjectId(sprintId)) {
+        task.sprintId = sprintId as any;
+      } else {
+        return res.status(400).json({
+          success: false,
+          error: "Invalid sprint identifier",
+        });
       }
     }
 
@@ -445,13 +513,13 @@ export async function updateTask(
           .status(404)
           .json({ success: false, error: "Assignee user not found" });
       }
-      
+
       const taskTenantId = task.tenantId.toString();
       if (
         !targetUser.tenantId ||
         targetUser.tenantId.toString() !== taskTenantId
       ) {
-         return res.status(400).json({
+        return res.status(400).json({
           success: false,
           error: "User does not belong to the task's tenant",
         });
@@ -475,8 +543,8 @@ export async function updateTask(
           : `Task "${task.title}" status changed from ${oldStatus} to ${status}`;
 
       // 1. Notify Assignee (if actor is NOT the assignee)
-      // Note: If assignee changed in this same request, we notify the NEW assignee about assignment, 
-      // but maybe we should notify them about status too? 
+      // Note: If assignee changed in this same request, we notify the NEW assignee about assignment,
+      // but maybe we should notify them about status too?
       // Simpler: Notify CURRENT task.userId (which is new assignee if changed).
       if (task.userId.toString() !== actor.userId) {
         notifications.push(
@@ -484,12 +552,13 @@ export async function updateTask(
             userId: task.userId.toString(),
             tenantId: task.tenantId.toString(),
             type: status === "completed" ? "task_completed" : "task_updated",
-            title: status === "completed" ? "Task Completed" : "Task Status Updated",
+            title:
+              status === "completed" ? "Task Completed" : "Task Status Updated",
             message: message,
             taskId: task._id.toString(),
             triggeredBy: actor.userId,
             metadata,
-          })
+          }),
         );
       }
 
@@ -498,17 +567,20 @@ export async function updateTask(
       if (task.createdBy.toString() !== actor.userId) {
         // Avoid double notification if Creator IS the Assignee (already handled above)
         if (task.createdBy.toString() !== task.userId.toString()) {
-           notifications.push(
+          notifications.push(
             notificationService.sendToUser({
               userId: task.createdBy.toString(),
               tenantId: task.tenantId.toString(),
               type: status === "completed" ? "task_completed" : "task_updated",
-              title: status === "completed" ? "Task Completed" : "Task Status Updated",
+              title:
+                status === "completed"
+                  ? "Task Completed"
+                  : "Task Status Updated",
               message: `${message} by user`, // Add context
               taskId: task._id.toString(),
               triggeredBy: actor.userId,
               metadata,
-            })
+            }),
           );
         }
       }
@@ -517,7 +589,8 @@ export async function updateTask(
     // B. Due Date Change Notifications
     // "duedate to both"
     const isDueDateChanged =
-      (dueDate !== undefined && oldDueDate?.getTime() !== task.dueDate?.getTime()) ||
+      (dueDate !== undefined &&
+        oldDueDate?.getTime() !== task.dueDate?.getTime()) ||
       (dueDate === null && oldDueDate !== null) ||
       (dueDate !== undefined && dueDate !== null && oldDueDate === null);
 
@@ -527,7 +600,7 @@ export async function updateTask(
 
       // Notify Assignee (if not actor)
       if (task.userId.toString() !== actor.userId) {
-         notifications.push(
+        notifications.push(
           notificationService.sendToUser({
             userId: task.userId.toString(),
             tenantId: task.tenantId.toString(),
@@ -536,8 +609,11 @@ export async function updateTask(
             message,
             taskId: task._id.toString(),
             triggeredBy: actor.userId,
-            metadata: { oldDueDate, newDueDate: task.dueDate },
-          })
+            metadata: { 
+              oldDueDate: oldDueDate ? oldDueDate.toISOString() : '', 
+              newDueDate: task.dueDate ? task.dueDate.toISOString() : '' 
+            },
+          }),
         );
       }
 
@@ -556,8 +632,11 @@ export async function updateTask(
             message,
             taskId: task._id.toString(),
             triggeredBy: actor.userId,
-            metadata: { oldDueDate, newDueDate: task.dueDate },
-          })
+            metadata: { 
+              oldDueDate: oldDueDate ? oldDueDate.toISOString() : '', 
+              newDueDate: task.dueDate ? task.dueDate.toISOString() : '' 
+            },
+          }),
         );
       }
     }
@@ -577,13 +656,13 @@ export async function updateTask(
             taskId: task._id.toString(),
             triggeredBy: actor.userId,
             metadata: { previousAssignee: oldAssigneeId },
-          })
+          }),
         );
       }
-      
+
       // Optional: Notify Old Assignee (if not actor)
       if (oldAssigneeId !== actor.userId) {
-          notifications.push(
+        notifications.push(
           notificationService.sendToUser({
             userId: oldAssigneeId,
             tenantId: task.tenantId.toString(),
@@ -592,12 +671,17 @@ export async function updateTask(
             message: `You have been unassigned from task: "${task.title}"`,
             taskId: task._id.toString(),
             triggeredBy: actor.userId,
-          })
+          }),
         );
       }
     }
 
     await Promise.all(notifications);
+
+    // Check if task is due within 1 day and send notification immediately (if due date was changed)
+    if (isDueDateChanged && task.dueDate) {
+      await checkAndNotifyDueSoon(task);
+    }
 
     res.json({
       success: true,
@@ -610,7 +694,10 @@ export async function updateTask(
         title: task.title,
         description: task.description,
         status: task.status,
+        priority: task.priority,
+        sprintId: task.sprintId?.toString() || null,
         dueDate: task.dueDate,
+        attachments: task.attachments,
         createdAt: task.createdAt,
         updatedAt: task.updatedAt,
       },
@@ -623,7 +710,7 @@ export async function updateTask(
 export async function deleteTask(
   req: AuthenticatedRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) {
   try {
     const { id } = req.params;
@@ -679,12 +766,11 @@ export async function deleteTask(
     next(err);
   }
 }
-// ... existing code ...
 
 export async function addAttachments(
   req: AuthenticatedRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) {
   try {
     const { id } = req.params;
@@ -698,7 +784,9 @@ export async function addAttachments(
     }
 
     if (!files || files.length === 0) {
-      return res.status(400).json({ success: false, error: "No files uploaded" });
+      return res
+        .status(400)
+        .json({ success: false, error: "No files uploaded" });
     }
 
     const filters: any = { _id: id };
@@ -716,7 +804,7 @@ export async function addAttachments(
 
     // Process files and upload to Cloudinary
     // Note: Since we use diskStorage or memoryStorage (if changed), we need to handle the upload to Cloudinary manually
-    // if using just multer, files are on disk (or memory). 
+    // if using just multer, files are on disk (or memory).
     // We should use cloudinary.uploader.upload
 
     const importCloudinary = await import("../config/cloudinary");
@@ -731,7 +819,7 @@ export async function addAttachments(
           folder: `taskflow/${task.tenantId}/tasks/${task._id}`,
           resource_type: "auto",
         });
-        
+
         uploadedAttachments.push({
           name: file.originalname,
           url: result.secure_url,
@@ -741,7 +829,7 @@ export async function addAttachments(
       } finally {
         // Clean up temp file
         if (fs.existsSync(file.path)) {
-             fs.unlinkSync(file.path);
+          fs.unlinkSync(file.path);
         }
       }
     }
@@ -763,7 +851,7 @@ export async function addAttachments(
 export async function removeAttachment(
   req: AuthenticatedRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) {
   try {
     const { id, attachmentId } = req.params;
@@ -790,7 +878,7 @@ export async function removeAttachment(
     }
 
     const attachmentIndex = task.attachments.findIndex(
-      (att: any) => att._id.toString() === attachmentId
+      (att: any) => att._id.toString() === attachmentId,
     );
 
     if (attachmentIndex === -1) {
@@ -804,9 +892,9 @@ export async function removeAttachment(
     // Remove from Cloudinary
     const importCloudinary = await import("../config/cloudinary");
     const cloudinary = importCloudinary.default;
-    
+
     if (attachment.publicId) {
-        await cloudinary.uploader.destroy(attachment.publicId);
+      await cloudinary.uploader.destroy(attachment.publicId);
     }
 
     task.attachments.splice(attachmentIndex, 1);

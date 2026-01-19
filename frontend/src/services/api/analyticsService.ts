@@ -7,6 +7,7 @@ export interface TaskStats {
   statusCounts: {
     todo: number;
     "in-progress": number;
+    "in-review": number;
     completed: number;
   };
   dueStats: {
@@ -21,6 +22,7 @@ export interface WorkloadStat {
   email: string;
   total: number;
   completed: number;
+  inReview: number;
   inProgress: number;
   todo: number;
   completionRate: number;
@@ -43,7 +45,7 @@ export const analyticsService = {
 
   getWorkloadStats: async () => {
     const response = await httpClient.get<{ data: WorkloadStat[] }>(
-      API_ENDPOINTS.ANALYTICS.WORKLOAD
+      API_ENDPOINTS.ANALYTICS.WORKLOAD,
     );
     return response.data;
   },

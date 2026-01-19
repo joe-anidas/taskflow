@@ -1,15 +1,17 @@
 import Task from "../models/Task";
 import { notificationService } from "../notification";
+import { getNowIST, getTomorrowIST } from "./dateUtils";
 
 /**
  * Check for overdue and due soon tasks and send notifications
  * This can be run as a scheduled job (e.g., with node-cron)
+ * All dates are handled in Indian Standard Time (IST)
  */
 export async function checkTaskDueDates() {
   try {
-    const now = new Date();
-    const tomorrow = new Date(now);
-    tomorrow.setDate(tomorrow.getDate() + 1);
+    // Use IST for all date comparisons
+    const now = getNowIST();
+    const tomorrow = getTomorrowIST();
     tomorrow.setHours(23, 59, 59, 999);
 
     // Find overdue tasks
@@ -40,16 +42,23 @@ export async function checkTaskDueDates() {
         title: "Task Overdue",
         message: `Task "${task.title}" is ${daysOverdue} day(s) overdue`,
         taskId: task._id.toString(),
-        metadata: { daysOverdue, dueDate: task.dueDate },
+        metadata: { 
+          daysOverdue: String(daysOverdue), 
+          dueDate: task.dueDate ? task.dueDate.toISOString() : '' 
+        },
       });
     }
 
     // Send due soon notifications
+    // Only notify if task is due within 24 hours (not already notified)
     for (const task of dueSoonTasks) {
       const hoursUntilDue = Math.floor(
         (task.dueDate!.getTime() - now.getTime()) / (1000 * 60 * 60)
       );
 
+      // Only send notification if task is due within 24 hours
+      // This prevents duplicate notifications for tasks that are already overdue
+      if (hoursUntilDue >= 0 && hoursUntilDue <= 24) {
       await notificationService.sendToUser({
         userId: task.userId.toString(),
         tenantId: task.tenantId.toString(),
@@ -57,8 +66,12 @@ export async function checkTaskDueDates() {
         title: "Task Due Soon",
         message: `Task "${task.title}" is due in ${hoursUntilDue} hour(s)`,
         taskId: task._id.toString(),
-        metadata: { hoursUntilDue, dueDate: task.dueDate },
+        metadata: { 
+          hoursUntilDue: String(hoursUntilDue), 
+          dueDate: task.dueDate ? task.dueDate.toISOString() : '' 
+        },
       });
+      }
     }
 
     console.log(

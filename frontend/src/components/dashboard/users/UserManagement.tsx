@@ -82,7 +82,12 @@ export const UserManagement = () => {
     setFormLoading(true);
     setFormError(null);
     try {
-      await httpClient.post(API_ENDPOINTS.AUTH.CREATE_TENANT_USER, data);
+      // For tenant admin, ensure tenantId is set from current user (backend will use actor's tenantId anyway, but this ensures consistency)
+      const payload = isTenantAdmin && user?.tenantId
+        ? { ...data, tenantId: user.tenantId }
+        : data;
+      
+      await httpClient.post(API_ENDPOINTS.AUTH.CREATE_TENANT_USER, payload);
       setSuccess(`User ${data.email} created successfully!`);
       setShowCreateUser(false);
       void loadUsers();
@@ -158,6 +163,11 @@ export const UserManagement = () => {
                 </Button>
               </>
            )}
+           {isTenantAdmin && (
+              <Button onClick={() => setShowCreateUser(true)}>
+                Create User
+              </Button>
+           )}
          </div>
       </div>
 
@@ -183,11 +193,16 @@ export const UserManagement = () => {
       {/* Modals */}
       <CreateUserModal
         isOpen={showCreateUser}
-        onClose={() => { setShowCreateUser(false); setFormError(null); }}
+        onClose={() => { 
+          setShowCreateUser(false); 
+          setFormError(null); 
+        }}
         onSubmit={handleCreateUser}
         isLoading={formLoading}
         error={formError}
         isSuperAdmin={isSuperAdmin}
+        isTenantAdmin={isTenantAdmin}
+        currentTenantId={user?.tenantId || undefined}
       />
 
       <CreateOrganizationModal

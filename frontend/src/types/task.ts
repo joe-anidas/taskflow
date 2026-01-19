@@ -7,9 +7,10 @@ export interface Task {
   createdBy?: string;
   tenantId: string;
   title: string;
-  description: string;
+  description?: string;
   status: TaskStatus;
   priority?: TaskPriority;
+  sprintId?: string | null;
   dueDate?: Date | null;
   createdAt: Date;
   updatedAt: Date;
@@ -24,7 +25,7 @@ export interface Task {
 
 export type TaskFormData = {
   title: string;
-  description: string;
+  description?: string;
   status: TaskStatus;
   priority?: TaskPriority;
   dueDate?: string | null;

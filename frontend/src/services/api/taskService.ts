@@ -29,8 +29,10 @@ interface TaskResponse {
   _id?: string;
   tenantId?: string;
   userId?: string;
+  sprintId?: string | null;
+  createdBy?: string;
   title: string;
-  description: string;
+  description?: string;
   priority?: string;
   dueDate?: string | null;
   status: TaskStatus;
@@ -70,6 +72,8 @@ const normalizeTask = (task: TaskResponse): Task => ({
   id: task.id || task._id || "",
   tenantId: task.tenantId || "",
   userId: task.userId,
+  createdBy: task.createdBy,
+  sprintId: task.sprintId ?? null,
   title: task.title,
   description: task.description,
   status: task.status as TaskStatus,
@@ -77,9 +81,9 @@ const normalizeTask = (task: TaskResponse): Task => ({
   dueDate: task.dueDate ? new Date(task.dueDate) : null,
   createdAt: new Date(task.createdAt),
   updatedAt: new Date(task.updatedAt),
-  attachments: task.attachments?.map(att => ({
+  attachments: task.attachments?.map((att) => ({
     ...att,
-    uploadedAt: new Date(att.uploadedAt)
+    uploadedAt: new Date(att.uploadedAt),
   })),
 });
 
@@ -108,7 +112,7 @@ export const taskService = {
   async createTask(data: CreateTaskData): Promise<Task> {
     const result = await httpClient.post<TaskCreateResponse>(
       API_ENDPOINTS.TASKS.CREATE,
-      data
+      data,
     );
     const task = result.task || result;
 
@@ -118,7 +122,7 @@ export const taskService = {
   async updateTask(id: string, data: UpdateTaskData): Promise<Task> {
     const result = await httpClient.put<TaskUpdateResponse>(
       API_ENDPOINTS.TASKS.UPDATE(id),
-      data
+      data,
     );
     const task = result.task || result;
 
@@ -137,7 +141,7 @@ export const taskService = {
     // Usually axios handles it if data is FormData.
     const result = await httpClient.post<TaskUpdateResponse>(
       `${API_ENDPOINTS.TASKS.UPDATE(id)}/attachments`,
-      formData
+      formData,
     );
     const task = result.task || result;
     return normalizeTask(task as TaskResponse);
@@ -145,7 +149,7 @@ export const taskService = {
 
   async removeAttachment(taskId: string, attachmentId: string): Promise<Task> {
     const result = await httpClient.delete<TaskUpdateResponse>(
-      `${API_ENDPOINTS.TASKS.UPDATE(taskId)}/attachments/${attachmentId}`
+      `${API_ENDPOINTS.TASKS.UPDATE(taskId)}/attachments/${attachmentId}`,
     );
     const task = result.task || result;
     return normalizeTask(task as TaskResponse);

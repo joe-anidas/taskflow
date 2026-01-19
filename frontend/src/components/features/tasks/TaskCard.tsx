@@ -1,4 +1,6 @@
+
 import type { Task } from "../../../types/task";
+import type { User } from "../../../types/user";
 import { Button } from "../../ui/button";
 import {
   STATUS_COLORS,
@@ -7,33 +9,46 @@ import {
   PRIORITY_LABELS,
 } from "../../../constants/task";
 import { useAuthStore } from "@/store";
+import { formatDateISTShort } from "@/utils/date";
 
 interface TaskCardProps {
   task: Task;
   onEdit: (task: Task) => void;
   onDelete: (id: string) => void;
-
-  isAssignedTask?: boolean; // Legacy prop, we'll use user check now
+  users?: User[]; // List of users (available for tenant admin)
 }
 
 export const TaskCard = ({
   task,
   onEdit,
   onDelete,
+  users,
 }: TaskCardProps) => {
   const { user } = useAuthStore();
   
-  // Logic: 
-  // - You own the task if you created it, OR if it's a legacy task (no createdBy).
-  // - If you didn't create it but it's assigned to you, it's an "Admin Assigned" task.
-  const isCreator = task.createdBy === user?.id || !task.createdBy;
-  const isAssignedToMe = task.userId === user?.id;
-  // It is only an "Admin Assigned" task if it has a creator AND that creator is not me
-  const isAdminAssigned = isAssignedToMe && task.createdBy && task.createdBy !== user?.id;
+  const isTenantAdmin = user?.role === "tenantAdmin" || user?.role === "superadmin";
+  const isUserRole = user?.role === "user";
 
+  // Logic for Tenant Admin: Find Assignee
+  const assignee = isTenantAdmin && users 
+    ? users.find(u => (u._id === task.userId || u.id === task.userId)) 
+    : null;
+    
+  const getInitials = (name: string) => {
+    const parts = name.trim().split(" ");
+    if (parts.length === 0) return "U";
+    if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  };
+
+  // Logic for User Role: Tags
+  const currentUserId = user?.id;
+  const isOwn = task.createdBy === currentUserId;
+  const isAssignedToMe = task.userId === currentUserId;
+  
   // Permissions
-  const canEdit = isCreator; // Only creator can edit details
-  const canDelete = isCreator; // Only creator can delete
+  const canEdit = isOwn || isAssignedToMe || isTenantAdmin; 
+  const canDelete = isOwn || isTenantAdmin;
 
   const isOverdue =
     task.dueDate &&
@@ -43,8 +58,6 @@ export const TaskCard = ({
   const dueDateObj = task.dueDate ? new Date(task.dueDate) : null;
   const now = new Date();
   
-  // Logic for Urgent: Due date is in the future but less than 48 hours away
-  // AND not completed
   const isUrgent = 
     dueDateObj &&
     task.status !== "completed" &&
@@ -63,17 +76,27 @@ export const TaskCard = ({
     >
       <div className="flex-1 space-y-2">
          <div className="flex items-start justify-between gap-2">
-            <div className="flex flex-wrap gap-1.5 pr-12">
-              {isAdminAssigned && (
-                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-700 border border-blue-100">
-                  Admin
-                </span>
+            <div className="flex flex-wrap gap-1.5 pr-12 items-center">
+               {/* User Role Tags */}
+              {isUserRole && (
+                <>
+                  {isOwn && (
+                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-100">
+                      OWN
+                    </span>
+                  )}
+
+                </>
               )}
+
+              {/* Urgent Badge */}
               {isUrgent && (
                 <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700 animate-pulse">
                   URGENT
                 </span>
               )}
+              
+              {/* Priority Badge */}
               {task.priority && (
                 <span
                   className={`inline-block px-2 py-0.5 rounded text-[10px] uppercase tracking-wide font-bold ${
@@ -97,11 +120,32 @@ export const TaskCard = ({
         </div>
 
         <div className="flex items-center justify-between pt-2 mt-auto">
+             
+             <div className="flex items-center gap-2">
+                {isUserRole && isAssignedToMe && !isOwn && (
+                    <span 
+                      className="w-2.5 h-2.5 rounded-full bg-red-500 shadow-sm animate-pulse" 
+                      title="Assigned to you"
+                    ></span>
+                )}
+                <span className={`text-[10px] px-2 py-0.5 rounded font-medium ${STATUS_COLORS[task.status]}`}>
+                    {STATUS_LABELS[task.status]}
+                </span>
 
-              <span className={`text-[10px] px-2 py-0.5 rounded font-medium ${STATUS_COLORS[task.status]}`}>
-                {STATUS_LABELS[task.status]}
-              </span>
-
+                {/* Tenant Admin: Profile Circle in side of status */}
+                {isTenantAdmin && assignee && (
+                   <div 
+                     className="w-5 h-5 rounded-full bg-green-600 text-white text-[10px] font-bold flex items-center justify-center border border-white shadow-sm"
+                     title={`Assigned to ${assignee.name}`}
+                   >
+                      {getInitials(assignee.name)}
+                   </div>
+                )}
+                 {/* Fallback */}
+                 {isTenantAdmin && !assignee && task.userId && (
+                     <div className="w-5 h-5 rounded-full bg-gray-300 text-white text-[10px] flex items-center justify-center border border-white">?</div>
+                 )}
+             </div>
            
            {task.dueDate && (
              <span className={`text-[10px] font-medium flex items-center gap-1 ${
@@ -110,7 +154,7 @@ export const TaskCard = ({
                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                </svg>
-               {new Date(task.dueDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+               {formatDateISTShort(task.dueDate)}
              </span>
            )}
         </div>
