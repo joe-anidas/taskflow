@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
-import { useAuthStore } from "../store/authStore";
-import { Loader } from "./common/Loader";
+import { useAuthStore } from "@/store";
+import { Loader } from "@/components/common";
+import { API_BASE_URL, API_ENDPOINTS } from "@/config/api";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -22,27 +23,25 @@ export const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
 
       try {
         const response = await fetch(
-          `${import.meta.env.VITE_API_URL}/auth/me`,
+          `${API_BASE_URL}${API_ENDPOINTS.AUTH.ME}`,
           {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
+            headers: { Authorization: `Bearer ${token}` },
           }
         );
 
         if (!response.ok) {
-          throw new Error("Failed to validate token");
+          throw new Error("Failed to validate user");
         }
 
         const result = await response.json();
-        const ok = Boolean(result?.success);
+        const exists = Boolean(result?.user?.id);
 
-        if (!ok) {
+        if (!exists) {
           logout();
         }
 
-        setIsValidUser(ok);
-      } catch (err) {
+        setIsValidUser(exists);
+      } catch {
         logout();
         setIsValidUser(false);
       } finally {

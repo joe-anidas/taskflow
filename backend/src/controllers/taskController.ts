@@ -1,20 +1,13 @@
 import { Response, NextFunction } from "express";
 import Task from "../models/Task";
-import { AuthenticatedRequest } from "../middleware/auth";
+import Organization from "../models/Organization";
+import User from "../models/User";
 import {
-  isValidTaskTitle,
   isValidTaskStatus,
-  sanitizeInput,
+  isValidTaskTitle,
+  isValidObjectId,
 } from "../utils/validators";
-
-const asTask = (task: any) => ({
-  id: task._id.toString(),
-  title: task.title,
-  description: task.description,
-  status: task.status,
-  createdAt: task.createdAt,
-  updatedAt: task.updatedAt,
-});
+import { AuthenticatedRequest } from "../middleware/auth";
 
 export async function getTasks(
   req: AuthenticatedRequest,
@@ -22,44 +15,93 @@ export async function getTasks(
   next: NextFunction
 ) {
   try {
-    const userId = req.user!.userId;
-    const page = Math.max(1, parseInt(req.query.page as string) || 1);
-    const limit = Math.max(1, parseInt(req.query.limit as string) || 3);
-    const q = (req.query.q as string) || "";
-    const status = (req.query.status as string) || "";
+    const {
+      page = "1",
+      limit = "10",
+      status,
+      q,
+      tenantId: tenantIdQuery,
+      userId: queryUserId,
+    } = req.query as {
+      page?: string;
+      limit?: string;
+      status?: string;
+      q?: string;
+      tenantId?: string;
+      userId?: string;
+    };
 
-    // Build filter
-    const filter: any = { userId };
-    if (q) {
-      filter.$or = [
-        { title: { $regex: q, $options: "i" } },
-        { description: { $regex: q, $options: "i" } },
-      ];
+    const parsedPage = Math.max(parseInt(page as string, 10) || 1, 1);
+    const parsedLimit = Math.min(
+      Math.max(parseInt(limit as string, 10) || 10, 1),
+      100
+    );
+
+    const actor = req.user!;
+    const effectiveTenantId =
+      actor.role === "superadmin"
+        ? tenantIdQuery && isValidObjectId(tenantIdQuery)
+          ? tenantIdQuery
+          : actor.tenantId
+        : actor.tenantId;
+
+    const query: any = {};
+
+    if (effectiveTenantId) {
+      query.tenantId = effectiveTenantId;
+    } else if (actor.role !== "superadmin") {
+      return res.status(403).json({
+        success: false,
+        error: "Tenant context is required",
+      });
     }
-    if (status) {
-      filter.status = status;
+
+    if (actor.role === "user") {
+      query.userId = actor.userId;
+    } else if (queryUserId && isValidObjectId(queryUserId)) {
+      query.userId = queryUserId;
     }
 
-    // Get total count
-    const total = await Task.countDocuments(filter);
-    const totalPages = Math.ceil(total / limit);
+    if (status && ["todo", "in-progress", "completed"].includes(status)) {
+      query.status = status;
+    }
+    if (q && typeof q === "string" && q.trim().length > 0) {
+      const regex = new RegExp(
+        q.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+        "i"
+      );
+      query.$or = [{ title: regex }, { description: regex }];
+    }
 
-    // Get paginated results
-    const skip = (page - 1) * limit;
-    const tasks = await Task.find(filter)
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit)
-      .exec();
+    const [total, tasks] = await Promise.all([
+      Task.countDocuments(query).exec(),
+      Task.find(query)
+        .sort({ createdAt: -1 })
+        .skip((parsedPage - 1) * parsedLimit)
+        .limit(parsedLimit)
+        .exec(),
+    ]);
+
+    const totalPages = Math.ceil(total / parsedLimit) || 1;
 
     res.json({
       success: true,
-      tasks: tasks.map(asTask),
-      page,
-      limit,
+      message: "Tasks fetched successfully",
+      page: parsedPage,
+      limit: parsedLimit,
       total,
       totalPages,
       count: tasks.length,
+      tasks: tasks.map((task) => ({
+        id: task._id.toString(),
+        tenantId: task.tenantId?.toString() || null,
+        userId: task.userId?.toString() || null,
+        title: task.title,
+        description: task.description,
+        status: task.status,
+        createdAt: task.createdAt,
+        updatedAt: task.updatedAt,
+      })),
     });
   } catch (err) {
     next(err);
@@ -73,10 +115,40 @@ export async function getTask(
 ) {
   try {
     const { id } = req.params;
-    const userId = req.user!.userId;
-    const task = await Task.findOne({ _id: id, userId });
-    if (!task) return res.status(404).json({ error: "not found" });
-    res.json({ task: asTask(task) });
+    const actor = req.user!;
+    const filters: any = { _id: id };
+
+    if (!isValidObjectId(id)) {
+      return res
+        .status(400)
+        .json({ success: false, error: "Invalid task identifier" });
+    }
+
+    if (actor.role !== "superadmin") {
+      filters.tenantId = actor.tenantId;
+    }
+    if (actor.role === "user") {
+      filters.userId = actor.userId;
+    }
+
+    const task = await Task.findOne(filters);
+    if (!task) {
+      return res.status(404).json({ success: false, error: "Task not found" });
+    }
+    res.json({
+      success: true,
+      message: "Task fetched successfully",
+      task: {
+        id: task._id.toString(),
+        tenantId: task.tenantId?.toString() || null,
+        userId: task.userId?.toString() || null,
+        title: task.title,
+        description: task.description,
+        status: task.status,
+        createdAt: task.createdAt,
+        updatedAt: task.updatedAt,
+      },
+    });
   } catch (err) {
     next(err);
   }
@@ -88,34 +160,144 @@ export async function createTask(
   next: NextFunction
 ) {
   try {
-    const { title, description = "", status = "todo" } = req.body || {};
-    const userId = req.user!.userId;
+    const {
+      title,
+      description = "",
+      status = "todo",
+      userId: bodyUserId,
+      tenantId: bodyTenantId,
+    } = req.body as {
+      title?: string;
+      description?: string;
+      status?: string;
+      userId?: string;
+      tenantId?: string;
+    };
 
-    // Validate title
-    const titleValidation = isValidTaskTitle(title);
-    if (!titleValidation.valid) {
-      return res.status(400).json({ error: titleValidation.message });
+    const actor = req.user!;
+    const tenantId =
+      actor.role === "superadmin"
+        ? bodyTenantId && isValidObjectId(bodyTenantId)
+          ? bodyTenantId
+          : actor.tenantId
+        : actor.tenantId;
+
+    if (!tenantId) {
+      return res.status(400).json({
+        success: false,
+        error: "Tenant context is required to create tasks",
+      });
     }
 
-    // Validate status
-    const statusValidation = isValidTaskStatus(status);
-    if (!statusValidation.valid) {
-      return res.status(400).json({ error: statusValidation.message });
+    const tenantExists = await Organization.exists({ _id: tenantId });
+    if (!tenantExists) {
+      return res.status(404).json({
+        success: false,
+        error: "Tenant not found",
+      });
     }
 
-    // Sanitize inputs
-    const sanitizedTitle = sanitizeInput(title, 200);
-    const sanitizedDescription = sanitizeInput(description, 500);
+    const titleCheck = isValidTaskTitle(title || "");
+    if (!titleCheck.valid) {
+      return res
+        .status(400)
+        .json({ success: false, error: titleCheck.message });
+    }
+
+    const statusCheck = isValidTaskStatus(status);
+    if (!statusCheck.valid) {
+      return res
+        .status(400)
+        .json({ success: false, error: statusCheck.message });
+    }
+
+    let ownerUserId = actor.userId;
+
+    // Superadmins must target a specific user in the tenant to avoid orphaned tasks
+    if (actor.role === "superadmin") {
+      if (!bodyUserId) {
+        return res.status(400).json({
+          success: false,
+          error: "userId is required when creating tasks as superadmin",
+        });
+      }
+      if (!isValidObjectId(bodyUserId)) {
+        return res.status(400).json({
+          success: false,
+          error: "Invalid user identifier",
+        });
+      }
+      const targetUser = await User.findById(bodyUserId);
+      if (!targetUser) {
+        return res
+          .status(404)
+          .json({ success: false, error: "User not found" });
+      }
+      if (
+        !targetUser.tenantId ||
+        targetUser.tenantId.toString() !== tenantId.toString()
+      ) {
+        return res.status(400).json({
+          success: false,
+          error: "User does not belong to the specified tenant",
+        });
+      }
+      ownerUserId = targetUser._id.toString();
+    } else if (actor.role === "tenantAdmin" && bodyUserId) {
+      if (!isValidObjectId(bodyUserId)) {
+        return res.status(400).json({
+          success: false,
+          error: "Invalid user identifier",
+        });
+      }
+      const targetUser = await User.findById(bodyUserId);
+      if (!targetUser) {
+        return res
+          .status(404)
+          .json({ success: false, error: "User not found" });
+      }
+      if (
+        !targetUser.tenantId ||
+        targetUser.tenantId.toString() !== tenantId.toString()
+      ) {
+        return res.status(403).json({
+          success: false,
+          error: "Cannot assign tasks to users outside your tenant",
+        });
+      }
+      ownerUserId = targetUser._id.toString();
+    }
+
+    if (!ownerUserId) {
+      return res.status(400).json({
+        success: false,
+        error: "User context is required to create tasks",
+      });
+    }
 
     const task = new Task({
-      title: sanitizedTitle,
-      description: sanitizedDescription,
+      title: (title || "").trim(),
+      description: description ? description.trim() : "",
       status,
-      userId,
+      userId: ownerUserId,
+      tenantId,
     });
     await task.save();
 
-    res.status(201).json({ task: asTask(task) });
+    res.status(201).json({
+      success: true,
+      message: "Task created successfully",
+      task: {
+        id: task._id.toString(),
+        tenantId: task.tenantId?.toString() || null,
+        userId: task.userId?.toString() || null,
+        title: task.title,
+        description: task.description,
+        status: task.status,
+        createdAt: task.createdAt,
+        updatedAt: task.updatedAt,
+      },
+    });
   } catch (err) {
     next(err);
   }
@@ -128,38 +310,74 @@ export async function updateTask(
 ) {
   try {
     const { id } = req.params;
-    const { title, description, status } = req.body || {};
-    const userId = req.user!.userId;
+    const { title, description, status } = req.body as {
+      title?: string;
+      description?: string;
+      status?: string;
+    };
 
-    const task = await Task.findOne({ _id: id, userId });
-    if (!task) return res.status(404).json({ error: "not found" });
+    const actor = req.user!;
 
-    // Validate and update title if provided
+    if (!isValidObjectId(id)) {
+      return res
+        .status(400)
+        .json({ success: false, error: "Invalid task identifier" });
+    }
+
+    const filters: any = { _id: id };
+
+    if (actor.role !== "superadmin") {
+      filters.tenantId = actor.tenantId;
+    }
+    if (actor.role === "user") {
+      filters.userId = actor.userId;
+    }
+
+    const task = await Task.findOne(filters);
+    if (!task) {
+      return res.status(404).json({ success: false, error: "Task not found" });
+    }
+
     if (title !== undefined) {
-      const titleValidation = isValidTaskTitle(title);
-      if (!titleValidation.valid) {
-        return res.status(400).json({ error: titleValidation.message });
+      const titleCheck = isValidTaskTitle(title);
+      if (!titleCheck.valid) {
+        return res
+          .status(400)
+          .json({ success: false, error: titleCheck.message });
       }
-      task.title = sanitizeInput(title, 200);
+      task.title = title.trim();
     }
 
-    // Validate and update description if provided
     if (description !== undefined) {
-      task.description = sanitizeInput(description, 500);
+      task.description = description ? description.trim() : "";
     }
 
-    // Validate and update status if provided
     if (status !== undefined) {
-      const statusValidation = isValidTaskStatus(status);
-      if (!statusValidation.valid) {
-        return res.status(400).json({ error: statusValidation.message });
+      const statusCheck = isValidTaskStatus(status);
+      if (!statusCheck.valid) {
+        return res
+          .status(400)
+          .json({ success: false, error: statusCheck.message });
       }
-      task.status = status;
+      task.status = status as any;
     }
 
     await task.save();
 
-    res.json({ task: asTask(task) });
+    res.json({
+      success: true,
+      message: "Task updated successfully",
+      task: {
+        id: task._id.toString(),
+        tenantId: task.tenantId?.toString() || null,
+        userId: task.userId?.toString() || null,
+        title: task.title,
+        description: task.description,
+        status: task.status,
+        createdAt: task.createdAt,
+        updatedAt: task.updatedAt,
+      },
+    });
   } catch (err) {
     next(err);
   }
@@ -172,10 +390,41 @@ export async function deleteTask(
 ) {
   try {
     const { id } = req.params;
-    const userId = req.user!.userId;
-    const task = await Task.findOneAndDelete({ _id: id, userId });
-    if (!task) return res.status(404).json({ error: "not found" });
-    res.json({ task: asTask(task) });
+
+    const actor = req.user!;
+
+    if (!isValidObjectId(id)) {
+      return res
+        .status(400)
+        .json({ success: false, error: "Invalid task identifier" });
+    }
+
+    const filters: any = { _id: id };
+    if (actor.role !== "superadmin") {
+      filters.tenantId = actor.tenantId;
+    }
+    if (actor.role === "user") {
+      filters.userId = actor.userId;
+    }
+
+    const task = await Task.findOneAndDelete(filters);
+    if (!task) {
+      return res.status(404).json({ success: false, error: "Task not found" });
+    }
+    res.json({
+      success: true,
+      message: "Task deleted successfully",
+      task: {
+        id: task._id.toString(),
+        tenantId: task.tenantId,
+        userId: task.userId,
+        title: task.title,
+        description: task.description,
+        status: task.status,
+        createdAt: task.createdAt,
+        updatedAt: task.updatedAt,
+      },
+    });
   } catch (err) {
     next(err);
   }

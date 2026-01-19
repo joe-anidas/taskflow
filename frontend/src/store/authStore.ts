@@ -1,18 +1,22 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { STORAGE_KEYS } from "@/config/api";
 
 interface User {
   id: string;
   name: string;
   email: string;
+  role?: "superadmin" | "tenantAdmin" | "user";
+  tenantId?: string | null;
 }
 
 interface AuthState {
   user: User | null;
-  isAuthenticated: boolean;
   token: string | null;
-  login: (user: User, token: string) => void;
+  isAuthenticated: boolean;
+  login: (token: string, user: User) => void;
   logout: () => void;
+  setUser: (user: User) => void;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -21,12 +25,15 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       token: null,
       isAuthenticated: false,
-      login: (user: User, token: string) => {
-        set({ user, token, isAuthenticated: true });
+      login: (token: string, user: User) => {
+        localStorage.setItem(STORAGE_KEYS.TOKEN, token);
+        set({ token, user, isAuthenticated: true });
       },
       logout: () => {
-        set({ user: null, token: null, isAuthenticated: false });
+        localStorage.removeItem(STORAGE_KEYS.TOKEN);
+        set({ token: null, user: null, isAuthenticated: false });
       },
+      setUser: (user: User) => set({ user }),
     }),
     {
       name: "auth-storage",

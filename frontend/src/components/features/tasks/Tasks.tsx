@@ -1,24 +1,24 @@
-import { useState } from "react";
-import type { Task, TaskFormData } from "../../types/task";
-import { useTasks } from "../../hooks/useTasks";
-import { TaskList } from "./TaskList";
-import { TaskForm } from "./TaskForm";
-import { Loader } from "../common/Loader";
-import { ErrorMessage } from "../common/ErrorMessage";
-import { Button } from "../ui/button";
+import { useState, useEffect } from "react";
+import type { Task, TaskFormData } from "@/types/task";
+import { useTasks } from "@/hooks";
+import { TaskList, TaskForm } from "./index";
+import { Loader, ErrorMessage } from "@/components/common";
+import { Button } from "@/components/ui";
+import { useAuthStore } from "@/store";
+import { httpClient } from "@/lib/httpClient";
+import { API_ENDPOINTS } from "@/config/api";
 
 export const Tasks = () => {
+  const { user } = useAuthStore();
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [orgName, setOrgName] = useState<string | null>(null);
 
   const {
     tasks,
     page,
     totalPages,
-    taskCounts,
-    status,
     setSearch,
-    setStatusFilter,
     nextPage,
     prevPage,
     isLoading,
@@ -29,7 +29,27 @@ export const Tasks = () => {
     deleteTask,
     isCreating,
     isUpdating,
-  } = useTasks();
+  } = useTasks({
+    userId: user?.id,
+    tenantId: user?.tenantId ?? null,
+    role: user?.role,
+  });
+
+  useEffect(() => {
+    if (user?.role === "user" && user?.tenantId) {
+      const loadOrganization = async () => {
+        try {
+          const data = await httpClient.get<{
+            organization?: { name: string } | null;
+          }>(API_ENDPOINTS.AUTH.ORGANIZATION);
+          setOrgName(data.organization?.name || null);
+        } catch (err) {
+          console.warn("Failed to fetch organization", err);
+        }
+      };
+      void loadOrganization();
+    }
+  }, [user]);
 
   const handleSubmit = (data: TaskFormData) => {
     if (editingTask) {
@@ -80,6 +100,12 @@ export const Tasks = () => {
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="text-3xl font-bold text-gray-900">My Tasks</h2>
+            {user?.role === "user" && orgName && (
+              <p className="mt-2 text-sm text-gray-600">
+                Organization:{" "}
+                <span className="font-semibold text-gray-900">{orgName}</span>
+              </p>
+            )}
             <p className="mt-1 text-sm text-gray-500">
               Manage your tasks efficiently
             </p>
@@ -87,7 +113,7 @@ export const Tasks = () => {
           {!isFormOpen && (
             <Button
               onClick={() => setIsFormOpen(true)}
-              size="default"
+              size="lg"
               className="w-full sm:w-auto"
             >
               + New Task
@@ -106,40 +132,9 @@ export const Tasks = () => {
 
         {isFormOpen && (
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-xl font-semibold text-gray-900">
-                {editingTask ? "Edit Task" : "Create New Task"}
-              </h3>
-              {!editingTask && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    const statuses = [
-                      "todo",
-                      "in-progress",
-                      "completed",
-                    ] as const;
-                    const randomStatus =
-                      statuses[Math.floor(Math.random() * statuses.length)];
-                    const demoTask = {
-                      title: "Complete project documentation",
-                      description:
-                        "Write comprehensive documentation for the new feature including API endpoints and usage examples",
-                      status: randomStatus,
-                    };
-                    createTask(demoTask, {
-                      onSuccess: () => {
-                        setIsFormOpen(false);
-                      },
-                    });
-                  }}
-                >
-                  ✨ Demo
-                </Button>
-              )}
-            </div>
+            <h3 className="text-xl font-semibold text-gray-900 mb-4">
+              {editingTask ? "Edit Task" : "Create New Task"}
+            </h3>
             <TaskForm
               task={editingTask}
               onSubmit={handleSubmit}
@@ -153,9 +148,7 @@ export const Tasks = () => {
 
         {isError && (
           <ErrorMessage
-            message={
-              error?.message || "Failed to load tasks. Please try again."
-            }
+            message={error || "Failed to load tasks. Please try again."}
           />
         )}
 
@@ -168,9 +161,6 @@ export const Tasks = () => {
             totalPages={totalPages}
             onPrevPage={prevPage}
             onNextPage={nextPage}
-            taskCounts={taskCounts}
-            status={status}
-            onStatusChange={setStatusFilter}
           />
         )}
       </div>

@@ -1,11 +1,7 @@
 import { useMemo, useState, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import {
-  getTasks,
-  createTask,
-  updateTask,
-  deleteTask,
-} from "../services/taskApi";
+import { taskService } from "@/services/api";
+import { getErrorMessage } from "@/types/errors";
 import type {
   Task,
   CreateTaskData,
@@ -14,122 +10,92 @@ import type {
   TaskQueryParams,
 } from "../types/task";
 
-const tasksQueryKey = (params?: TaskQueryParams) => [
+type UserRole = "superadmin" | "tenantAdmin" | "user";
+
+type UseTasksContext = {
+  userId?: string;
+  tenantId?: string | null;
+  role?: UserRole;
+};
+
+const tasksQueryKey = (context?: UseTasksContext, params?: TaskQueryParams) => [
   "tasks",
+  context?.tenantId ?? "self",
+  context?.userId ?? "self",
+  context?.role ?? "user",
   params?.page ?? 1,
-  params?.limit ?? 3,
+  params?.limit ?? 6,
   params?.q ?? "",
   params?.status ?? "all",
 ];
 
-export const useTasks = () => {
+export const useTasks = (context?: UseTasksContext) => {
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(3);
+  const [limit, setLimit] = useState(6);
   const [q, setQ] = useState("");
   const [status, setStatus] = useState<"all" | Task["status"]>("all");
 
-  // Fetch current page of tasks
+  const tenantId = context?.tenantId ?? undefined;
+  const userId = context?.userId ?? undefined;
+  const role = context?.role ?? "user";
+
+  const isQueryEnabled =
+    role === "superadmin" ? true : Boolean(tenantId || userId);
+
   const { data, isLoading, isError, error } = useQuery({
-    queryKey: tasksQueryKey({ page, limit, q, status }),
-    queryFn: () => getTasks({ page, limit, q, status }),
-  });
-
-  // Fetch total counts for each status
-  const { data: allTasksData } = useQuery({
-    queryKey: ["tasks-all", q],
-    queryFn: () => getTasks({ page: 1, limit: 1000, q, status: "all" }),
-  });
-
-  const { data: todoData } = useQuery({
-    queryKey: ["tasks-todo", q],
-    queryFn: () => getTasks({ page: 1, limit: 1000, q, status: "todo" }),
-  });
-
-  const { data: inProgressData } = useQuery({
-    queryKey: ["tasks-in-progress", q],
-    queryFn: () => getTasks({ page: 1, limit: 1000, q, status: "in-progress" }),
-  });
-
-  const { data: completedData } = useQuery({
-    queryKey: ["tasks-completed", q],
-    queryFn: () => getTasks({ page: 1, limit: 1000, q, status: "completed" }),
+    queryKey: tasksQueryKey(context, { page, limit, q, status }),
+    queryFn: () =>
+      taskService.getTasks({
+        page,
+        limit,
+        q,
+        status,
+        tenantId,
+        userId: role === "user" ? userId : undefined,
+      }),
+    enabled: isQueryEnabled,
   });
 
   const tasks = useMemo(() => data?.tasks ?? [], [data]);
   const totalPages = data?.totalPages ?? 1;
   const total = data?.total ?? 0;
-
-  const taskCounts = useMemo(
-    () => ({
-      all: allTasksData?.total ?? 0,
-      todo: todoData?.total ?? 0,
-      "in-progress": inProgressData?.total ?? 0,
-      completed: completedData?.total ?? 0,
-    }),
-    [allTasksData, todoData, inProgressData, completedData]
-  );
-
-  const invalidateCountQueries = () => {
-    queryClient.invalidateQueries({ queryKey: ["tasks-all"] });
-    queryClient.invalidateQueries({ queryKey: ["tasks-todo"] });
-    queryClient.invalidateQueries({ queryKey: ["tasks-in-progress"] });
-    queryClient.invalidateQueries({ queryKey: ["tasks-completed"] });
-  };
+  const errorMessage = error ? getErrorMessage(error) : null;
 
   const createTaskMutation = useMutation({
     mutationFn: (data: TaskFormData) => {
       const payload: CreateTaskData = { ...data } as CreateTaskData;
-      return createTask(payload);
+      if (tenantId) {
+        payload.tenantId = tenantId;
+      }
+      if (role !== "user" && userId) {
+        payload.userId = userId;
+      }
+      return taskService.createTask(payload);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: tasksQueryKey({ page, limit, q, status }),
+        queryKey: tasksQueryKey(context, { page, limit, q, status }),
       });
-      invalidateCountQueries();
     },
   });
 
   const updateTaskMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdateTaskData }) =>
-      updateTask(id, data),
+      taskService.updateTask(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: tasksQueryKey({ page, limit, q, status }),
+        queryKey: tasksQueryKey(context, { page, limit, q, status }),
       });
-      invalidateCountQueries();
     },
   });
 
   const deleteTaskMutation = useMutation({
-    mutationFn: (id: string) => deleteTask(id),
-    onSuccess: async () => {
-      // Invalidate all queries to get fresh data
+    mutationFn: (id: string) => taskService.deleteTask(id),
+    onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: tasksQueryKey({ page, limit, q, status }),
+        queryKey: tasksQueryKey(context, { page, limit, q, status }),
       });
-      invalidateCountQueries();
-
-      // Wait for refetch to complete
-      await queryClient.refetchQueries({
-        queryKey: tasksQueryKey({ page, limit, q, status }),
-      });
-
-      // Check the refetched data
-      const refetchedData = queryClient.getQueryData(
-        tasksQueryKey({ page, limit, q, status })
-      ) as any;
-
-      if (refetchedData) {
-        // If current page has no tasks and we're not on page 1, move to previous page
-        if (
-          refetchedData.tasks?.length === 0 &&
-          refetchedData.page > 1 &&
-          page > 1
-        ) {
-          setPage((p) => Math.max(1, p - 1));
-        }
-      }
     },
   });
 
@@ -144,12 +110,8 @@ export const useTasks = () => {
   }, []);
 
   const nextPage = useCallback(() => {
-    setPage((p) => {
-      // Prevent going beyond total pages
-      const nextPageNum = p + 1;
-      return nextPageNum <= (totalPages || 1) ? nextPageNum : p;
-    });
-  }, [totalPages]);
+    setPage((p) => p + 1);
+  }, []);
 
   const prevPage = useCallback(() => {
     setPage((p) => Math.max(1, p - 1));
@@ -161,8 +123,6 @@ export const useTasks = () => {
     limit,
     total,
     totalPages,
-    taskCounts,
-    status,
     setPage,
     setLimit,
     setSearch,
@@ -171,11 +131,21 @@ export const useTasks = () => {
     prevPage,
     isLoading,
     isError,
-    error,
+    error: errorMessage,
 
     createTask: createTaskMutation.mutate,
     updateTask: updateTaskMutation.mutate,
     deleteTask: deleteTaskMutation.mutate,
+
+    createError: createTaskMutation.error
+      ? getErrorMessage(createTaskMutation.error)
+      : null,
+    updateError: updateTaskMutation.error
+      ? getErrorMessage(updateTaskMutation.error)
+      : null,
+    deleteError: deleteTaskMutation.error
+      ? getErrorMessage(deleteTaskMutation.error)
+      : null,
 
     isCreating: createTaskMutation.isPending,
     isUpdating: updateTaskMutation.isPending,

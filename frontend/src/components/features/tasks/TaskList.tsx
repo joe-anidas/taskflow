@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
-import type { Task, TaskStatus } from "../../types/task";
+import type { Task, TaskStatus } from "../../../types/task";
 import { TaskCard } from "./TaskCard";
-import { Button } from "../ui/button";
+import { Button } from "../../ui/button";
 
 interface TaskListProps {
   tasks: Task[];
@@ -11,14 +11,6 @@ interface TaskListProps {
   totalPages?: number;
   onPrevPage?: () => void;
   onNextPage?: () => void;
-  taskCounts?: {
-    all: number;
-    todo: number;
-    "in-progress": number;
-    completed: number;
-  };
-  status?: "all" | TaskStatus;
-  onStatusChange?: (status: "all" | TaskStatus) => void;
 }
 
 export const TaskList = ({
@@ -29,51 +21,55 @@ export const TaskList = ({
   totalPages = 1,
   onPrevPage,
   onNextPage,
-  taskCounts: passedTaskCounts,
-  status = "all",
-  onStatusChange,
 }: TaskListProps) => {
+  const [filter, setFilter] = useState<TaskStatus | "all">("all");
+
   const taskCounts = useMemo(
+    () => ({
+      all: tasks.length,
+      todo: tasks.filter((t) => t.status === "todo").length,
+      "in-progress": tasks.filter((t) => t.status === "in-progress").length,
+      completed: tasks.filter((t) => t.status === "completed").length,
+    }),
+    [tasks]
+  );
+
+  const filteredTasks = useMemo(
     () =>
-      passedTaskCounts || {
-        all: tasks.length,
-        todo: tasks.filter((t) => t.status === "todo").length,
-        "in-progress": tasks.filter((t) => t.status === "in-progress").length,
-        completed: tasks.filter((t) => t.status === "completed").length,
-      },
-    [tasks, passedTaskCounts]
+      filter === "all" ? tasks : tasks.filter((task) => task.status === filter),
+    [tasks, filter]
   );
 
   return (
     <div>
       <div className="flex flex-wrap gap-2 mb-6">
         <Button
-          variant={status === "all" ? "default" : "outline"}
-          onClick={() => onStatusChange?.("all")}
+          variant={filter === "all" ? "default" : "outline"}
+          onClick={() => setFilter("all")}
         >
           All ({taskCounts.all})
         </Button>
         <Button
-          variant={status === "todo" ? "default" : "outline"}
-          onClick={() => onStatusChange?.("todo")}
+          variant={filter === "todo" ? "default" : "outline"}
+          onClick={() => setFilter("todo")}
         >
           To Do ({taskCounts.todo})
         </Button>
         <Button
-          variant={status === "in-progress" ? "default" : "outline"}
-          onClick={() => onStatusChange?.("in-progress")}
+          variant={filter === "in-progress" ? "default" : "outline"}
+          onClick={() => setFilter("in-progress")}
         >
           In Progress ({taskCounts["in-progress"]})
         </Button>
         <Button
-          variant={status === "completed" ? "default" : "outline"}
-          onClick={() => onStatusChange?.("completed")}
+          variant={filter === "completed" ? "default" : "outline"}
+          onClick={() => setFilter("completed")}
         >
           Completed ({taskCounts.completed})
         </Button>
       </div>
 
-      {tasks.length === 0 ? (
+      {filteredTasks.length === 0 ? (
         <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
           <svg
             className="mx-auto h-12 w-12 text-gray-400"
@@ -90,15 +86,15 @@ export const TaskList = ({
           </svg>
           <h3 className="mt-2 text-sm font-medium text-gray-900">No tasks</h3>
           <p className="mt-1 text-sm text-gray-500">
-            {status === "all"
+            {filter === "all"
               ? "Get started by creating a new task."
-              : `No ${status} tasks found.`}
+              : `No ${filter} tasks found.`}
           </p>
         </div>
       ) : (
         <>
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {tasks.map((task) => (
+            {filteredTasks.map((task) => (
               <TaskCard
                 key={task.id}
                 task={task}

@@ -2,6 +2,8 @@ export type TaskStatus = "todo" | "in-progress" | "completed";
 
 export interface Task {
   id: string;
+  userId?: string;
+  tenantId: string;
   title: string;
   description: string;
   status: TaskStatus;
@@ -15,7 +17,11 @@ export type TaskFormData = {
   status: TaskStatus;
 };
 
-export type CreateTaskData = TaskFormData;
+export type CreateTaskData = TaskFormData & {
+  userId?: string;
+  tenantId?: string;
+};
+
 export type UpdateTaskData = Partial<TaskFormData>;
 
 export type TaskQueryParams = {
@@ -23,6 +29,8 @@ export type TaskQueryParams = {
   limit?: number;
   status?: TaskStatus | "all";
   q?: string;
+  tenantId?: string;
+  userId?: string;
 };
 
 export type TaskPage = {

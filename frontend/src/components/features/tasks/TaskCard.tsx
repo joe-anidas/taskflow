@@ -1,23 +1,12 @@
-import type { Task } from "../../types/task";
-import { Button } from "../ui/button";
+import type { Task } from "../../../types/task";
+import { Button } from "../../ui/button";
+import { STATUS_COLORS, STATUS_LABELS } from "../../../constants/task";
 
 interface TaskCardProps {
   task: Task;
   onEdit: (task: Task) => void;
   onDelete: (id: string) => void;
 }
-
-const statusColors = {
-  todo: "bg-gray-100 text-gray-800",
-  "in-progress": "bg-blue-100 text-blue-800",
-  completed: "bg-green-100 text-green-800",
-};
-
-const statusLabels = {
-  todo: "To Do",
-  "in-progress": "In Progress",
-  completed: "Completed",
-};
 
 export const TaskCard = ({ task, onEdit, onDelete }: TaskCardProps) => {
   return (
@@ -30,23 +19,23 @@ export const TaskCard = ({ task, onEdit, onDelete }: TaskCardProps) => {
           <p className="text-gray-600 text-sm mb-3">{task.description}</p>
           <span
             className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${
-              statusColors[task.status]
+              STATUS_COLORS[task.status]
             }`}
           >
-            {statusLabels[task.status]}
+            {STATUS_LABELS[task.status]}
           </span>
         </div>
       </div>
 
-      <div className="flex flex-col gap-2 pt-4 border-t border-gray-100">
+      <div className="flex flex-col gap-3 pt-4 border-t border-gray-100 sm:flex-row sm:items-center sm:justify-between">
         <span className="text-xs text-gray-500">
           Updated: {new Date(task.updatedAt).toLocaleDateString()}
         </span>
-        <div className="flex gap-2 w-full">
+        <div className="flex gap-2 sm:justify-end">
           <Button
             variant="outline"
             size="sm"
-            className="flex-1"
+            className="w-full sm:w-auto"
             onClick={() => onEdit(task)}
           >
             Edit
@@ -54,7 +43,7 @@ export const TaskCard = ({ task, onEdit, onDelete }: TaskCardProps) => {
           <Button
             variant="destructive"
             size="sm"
-            className="flex-1"
+            className="w-full sm:w-auto"
             onClick={() => onDelete(task.id)}
           >
             Delete

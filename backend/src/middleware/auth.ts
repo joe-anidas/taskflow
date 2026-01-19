@@ -1,19 +1,33 @@
 import { Request, Response, NextFunction } from "express";
 import jwt, { JwtPayload } from "jsonwebtoken";
-import "dotenv/config";
-
-
-const JWT_SECRET: string = process.env.JWT_SECRET || "jwt-secret-change-me";
+import { JWT_SECRET } from "../config/env";
+import { UserRole } from "../models/User";
 
 export interface AuthPayload extends JwtPayload {
   userId: string;
   email?: string;
   name?: string;
+  role?: UserRole;
+  tenantId?: string;
 }
 
 export interface AuthenticatedRequest extends Request {
   user?: AuthPayload;
 }
+
+export const authorizeRoles = (...roles: UserRole[]) => {
+  return (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    const role = req.user?.role;
+    if (!role || !roles.includes(role)) {
+      return res.status(403).json({
+        success: false,
+        error: "Forbidden",
+        message: "You do not have permission to perform this action",
+      });
+    }
+    next();
+  };
+};
 
 export function authenticateToken(
   req: AuthenticatedRequest,
@@ -25,14 +39,30 @@ export function authenticateToken(
     const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
 
     if (!token) {
-      return res.status(401).json({ error: "no token" });
+      return res.status(401).json({
+        success: false,
+        error: "Missing token",
+        message: "Authorization header with Bearer token is required",
+      });
     }
 
     const decoded = jwt.verify(token, JWT_SECRET) as AuthPayload;
     req.user = decoded;
     next();
-  } catch (_err) {
-    return res.status(401).json({ error: "invalid token" });
+  } catch (err: any) {
+    if (err.name === "TokenExpiredError") {
+      return res.status(401).json({
+        success: false,
+        error: "Token expired",
+        message: "Your session has expired. Please login again",
+      });
+    }
+
+    return res.status(401).json({
+      success: false,
+      error: "Invalid token",
+      message: "The provided token is invalid or malformed",
+    });
   }
 }
 
