@@ -9,6 +9,7 @@ import {
   ValidationError,
   type APIErrorResponse,
 } from "@/types/errors";
+import { useAuthStore } from "@/store/authStore";
 
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000; // ms
@@ -31,8 +32,6 @@ class HTTPClient {
   }
 
   private async getValidToken(): Promise<string> {
-    // Lazy load to avoid circular dependency
-    const { useAuthStore } = await import("@/store/authStore");
     const { token, isAuthenticated } = useAuthStore.getState();
 
     if (!token || !isAuthenticated) {
@@ -51,8 +50,6 @@ class HTTPClient {
 
     const refreshPromise = (async () => {
       try {
-        // Lazy load to avoid circular dependency
-        const { useAuthStore } = await import("@/store/authStore");
         const { logout } = useAuthStore.getState();
         logout();
       } catch (error) {
