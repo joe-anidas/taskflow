@@ -10,6 +10,7 @@ import {
   type APIErrorResponse,
 } from "@/types/errors";
 import { useAuthStore } from "@/store/authStore";
+import { API_BASE_URL } from "@/config/api";
 
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000; // ms
@@ -226,5 +227,5 @@ class HTTPClient {
 }
 
 export const httpClient = new HTTPClient(
-  import.meta.env.VITE_BACKEND_API_URL || "http://localhost:3000",
+  API_BASE_URL,
 );
