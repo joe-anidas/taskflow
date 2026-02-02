@@ -23,12 +23,12 @@ export default defineConfig({
         drop_console: true,
         drop_debugger: true,
         pure_funcs: ["console.log", "console.info", "console.debug"],
-        passes: 3,
-        toplevel: true,
+        passes: 2,
+        toplevel: false,
         ecma: 2020,
       },
       mangle: {
-        toplevel: true,
+        toplevel: false,
         safari10: true,
       },
       format: {

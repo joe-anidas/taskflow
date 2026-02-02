@@ -25,7 +25,8 @@
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
     "express-rate-limit": "^8.2.1",
-    "firebase-admin": "^13.6.0",
+    "fast-xml-parser": "^5.3.4",
+    "firebase-admin": "^12.7.0",
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.20.4",
@@ -45,5 +46,16 @@
     "concurrently": "^9.1.0",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.9.3"
+  },
+  "overrides": {
+    "fast-xml-parser": "^5.3.4"
+  },
+  "overrides": {
+    "fast-xml-parser": "^5.3.4"
+  },
+  "npm": {
+    "audit": {
+      "audit-level": "moderate"
+    }
   }
 }
